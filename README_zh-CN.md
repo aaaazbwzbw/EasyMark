@@ -16,6 +16,8 @@
 
 [English](README.md) | [简体中文](README_zh-CN.md)
 
+⭐ **大家的 Star 就是我更新的动力！** ⭐
+
 ---
 
 ## 下载
@@ -35,8 +37,9 @@ EasyMark 是一款现代化、高性能的计算机视觉标注工具。支持�
 
 <div align="center">
 
-<img src="docs/assets/demo1.gif" alt="EasyMark AI 分割演示" width="49%">
-<img src="docs/assets/demo2.gif" alt="EasyMark 自动检测演示" width="49%">
+<img src="docs/assets/demo1.gif" alt="EasyMark AI 分割演示" width="80%">
+<br>
+<img src="docs/assets/demo2.gif" alt="EasyMark 自动检测演示" width="80%">
 
 </div>
 

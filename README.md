@@ -16,6 +16,8 @@
 
 [English](README.md) | [简体中文](README_zh-CN.md)
 
+⭐ **Your stars motivate me to keep improving!** ⭐
+
 ---
 
 ## Download
@@ -35,8 +37,9 @@ EasyMark is a modern, high-performance annotation tool designed for computer vis
 
 <div align="center">
 
-<img src="docs/assets/demo1.gif" alt="EasyMark AI Segmentation Demo" width="49%">
-<img src="docs/assets/demo2.gif" alt="EasyMark Auto Detection Demo" width="49%">
+<img src="docs/assets/demo1.gif" alt="EasyMark AI Segmentation Demo" width="80%">
+<br>
+<img src="docs/assets/demo2.gif" alt="EasyMark Auto Detection Demo" width="80%">
 
 </div>
 
