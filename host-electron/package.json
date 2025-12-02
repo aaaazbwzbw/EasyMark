@@ -2,6 +2,10 @@
   "name": "easymark",
   "version": "1.0.0",
   "description": "EasyMark - 计算机视觉标注工具",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aaaazbwzbw/EasyMark.git"
+  },
   "main": "main.js",
   "scripts": {
     "start": "electron .",
