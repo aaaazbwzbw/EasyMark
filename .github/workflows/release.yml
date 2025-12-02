@@ -1,0 +1,60 @@
+# .github/workflows/release.yml (v2)
+
+name: Build & Release (Windows)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+      
+      # 新增：安装所有依赖
+      - name: Install All Dependencies
+        run: |
+          echo "Installing frontend dependencies..."
+          npm ci --prefix frontend
+          echo "Installing electron dependencies..."
+          npm ci --prefix host-electron
+
+      # 新增：构建 Vue 前端
+      - name: Build Vue Frontend
+        run: npm run build
+        working-directory: ./frontend
+
+      # 修正：使用您的优化参数和正确的文件名构建 Go 后端
+      - name: Build Go Backend
+        run: go build -ldflags "-s -w" -o easymark-backend.exe .
+        working-directory: ./backend-go
+
+      # 修正：使用 npx electron-builder 并明确指定平台
+      - name: Build with electron-builder
+        run: npx electron-builder --win --x64
+        working-directory: ./host-electron
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 上传安装包到 Release
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            host-electron/dist/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

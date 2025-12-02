@@ -1,0 +1,45 @@
+{
+  "id": "infer.yoloe",
+  "name": {
+    "zh-CN": "YOLOE 视觉提示",
+    "en-US": "YOLOE Visual Prompt"
+  },
+  "version": "1.0.0",
+  "type": "inference",
+  "description": {
+    "zh-CN": "框选一个目标，自动检测图片中所有相似目标",
+    "en-US": "Select one object to detect all similar objects in the image"
+  },
+  "author": "EasyMark Team",
+  
+  "inference": {
+    "defaultIcon": "scan-search",
+    "serviceEntry": "infer_service.py",
+    "serviceType": "stdio",
+    "supportedTasks": ["detect", "segment"],
+    "interactionMode": "box",
+    "ui": {
+      "type": "custom",
+      "entry": "index.html"
+    }
+  },
+  
+  "python": {
+    "minVersion": "3.9",
+    "requirements": [
+      "ultralytics>=8.3.0",
+      "numpy>=1.20.0",
+      "opencv-python>=4.6.0"
+    ],
+    "pytorch": {
+      "packages": ["torch>=2.0.0", "torchvision>=0.15.0"],
+      "gpu": {
+        "minCuda": "11.8",
+        "indexUrl": "https://download.pytorch.org/whl/cu118"
+      },
+      "cpu": {
+        "indexUrl": "https://download.pytorch.org/whl/cpu"
+      }
+    }
+  }
+}

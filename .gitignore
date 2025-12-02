@@ -1,0 +1,75 @@
+# ========== 个人备忘（不上传） ==========
+DEV_NOTES.md
+docs/使用.md
+docs/OpenSourceChecklist.md
+
+# ========== 通用 ==========
+# 日志文件
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE/编辑器
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# 环境变量文件
+.env
+.env.local
+.env.*.local
+
+# ========== Node.js ==========
+node_modules/
+*.local
+
+# ========== 前端 (frontend) ==========
+frontend/dist/
+frontend/dist-ssr/
+
+# ========== Electron (host-electron) ==========
+# 打包输出目录
+host-electron/dist/
+# 不忽略 node_modules（已在通用规则中忽略）
+
+# ========== Go 后端 (backend-go) ==========
+# 编译产物
+backend-go/*.exe
+backend-go/backup/
+
+# ========== 插件编译产物 ==========
+host-plugins/**/*.exe
+
+# ========== Python 插件 ==========
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# 虚拟环境（实际在用户数据目录，但以防万一）
+.venv/
+venv/
+ENV/
+
+# ========== 模型文件 ==========
+# 大型模型文件不应上传
+*.pt
+*.pth
+*.onnx
+*.safetensors
+*.bin
+
+# ========== 其他 ==========
+# 临时文件
+*.tmp
+*.temp

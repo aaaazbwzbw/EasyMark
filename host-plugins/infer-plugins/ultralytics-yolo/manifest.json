@@ -1,0 +1,72 @@
+{
+  "id": "infer.ultralytics-yolo",
+  "name": {
+    "zh-CN": "YOLO 推理",
+    "en-US": "YOLO Inference"
+  },
+  "version": "1.0.0",
+  "type": "inference",
+  "description": {
+    "zh-CN": "基于 Ultralytics 的 YOLO 模型推理插件，支持目标检测、实例分割和姿态估计",
+    "en-US": "YOLO model inference plugin based on Ultralytics, supporting object detection, instance segmentation, and pose estimation"
+  },
+  "author": "EasyMark Team",
+  
+  "inference": {
+    "icon": null,
+    "defaultIcon": "brain",
+    "serviceEntry": "infer_service.py",
+    "serviceType": "stdio",
+    "supportedTasks": ["detect", "segment", "pose"],
+    "ui": {
+      "modelSelector": true,
+      "confidenceSlider": {
+        "default": 0.25,
+        "min": 0.01,
+        "max": 1.0,
+        "step": 0.01
+      },
+      "iouSlider": {
+        "default": 0.45,
+        "min": 0.01,
+        "max": 1.0,
+        "step": 0.01
+      },
+      "autoInfer": {
+        "default": true
+      },
+      "customParams": [
+        {
+          "key": "imageSize",
+          "type": "number",
+          "label": { "zh-CN": "输入尺寸", "en-US": "Image Size" },
+          "default": 640,
+          "min": 320,
+          "max": 1280,
+          "step": 32
+        }
+      ]
+    }
+  },
+  
+  "python": {
+    "minVersion": "3.8",
+    "useVenvFrom": "ultralytics",
+    "requirements": [
+      "ultralytics>=8.0.0",
+      "numpy>=1.20.0,<2",
+      "opencv-python>=4.6.0",
+      "pillow>=9.0.0"
+    ],
+    "pytorch": {
+      "packages": ["torch>=2.0.0", "torchvision>=0.15.0"],
+      "gpu": {
+        "minCuda": "11.8",
+        "indexUrl": "https://download.pytorch.org/whl/cu118"
+      },
+      "cpu": {
+        "indexUrl": "https://download.pytorch.org/whl/cpu"
+      }
+    }
+  }
+}

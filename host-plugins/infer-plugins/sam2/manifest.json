@@ -1,0 +1,48 @@
+{
+  "id": "infer.sam2",
+  "name": {
+    "zh-CN": "SAM-2 分割",
+    "en-US": "SAM-2 Segmentation"
+  },
+  "version": "1.0.0",
+  "type": "inference",
+  "description": {
+    "zh-CN": "Meta 的 Segment Anything Model 2，支持交互式分割",
+    "en-US": "Meta's Segment Anything Model 2 for interactive segmentation"
+  },
+  "author": "EasyMark Team",
+  
+  "inference": {
+    "icon": "logo.svg",
+    "defaultIcon": "scissors",
+    "serviceEntry": "infer_service.py",
+    "serviceType": "stdio",
+    "supportedTasks": ["segment"],
+    "interactionMode": "prompt",
+    "ui": {
+      "type": "custom",
+      "entry": "index.html"
+    }
+  },
+  
+  "python": {
+    "minVersion": "3.10",
+    "requirements": [
+      "sam2>=1.1.0",
+      "numpy>=1.20.0,<2",
+      "opencv-python>=4.6.0",
+      "pillow>=9.0.0",
+      "scipy>=1.10.0"
+    ],
+    "pytorch": {
+      "packages": ["torch>=2.5.1", "torchvision>=0.20.0"],
+      "gpu": {
+        "minCuda": "12.4",
+        "indexUrl": "https://download.pytorch.org/whl/cu124"
+      },
+      "cpu": {
+        "indexUrl": "https://download.pytorch.org/whl/cpu"
+      }
+    }
+  }
+}

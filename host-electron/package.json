@@ -1,0 +1,85 @@
+{
+  "name": "easymark",
+  "version": "1.0.0",
+  "description": "EasyMark - 计算机视觉标注工具",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:vue": "cd ../frontend && npm run build",
+    "build:go": "cd ../backend-go && go build -ldflags \"-s -w\" -o easymark-backend.exe .",
+    "build:electron": "electron-builder --win --x64",
+    "build": "npm run build:vue && npm run build:go && npm run build:electron"
+  },
+  "keywords": ["annotation", "labeling", "computer-vision"],
+  "author": "EasyMark",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^39.2.3",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "@types/marked": "^5.0.2",
+    "adm-zip": "^0.5.16",
+    "marked": "^17.0.1",
+    "unrar-promise": "^3.1.0"
+  },
+  "build": {
+    "appId": "com.easymark.app",
+    "productName": "EasyMark",
+    "copyright": "Copyright © 2025 EasyMark",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json",
+      "logo.ico"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend/dist",
+        "to": "app",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../backend-go/easymark-backend.exe",
+        "to": "backend/easymark-backend.exe"
+      },
+      {
+        "from": "../host-plugins/infer-plugins/sam2",
+        "to": "builtin-plugins/infer.sam2",
+        "filter": ["**/*", "!*.downloading"]
+      },
+      {
+        "from": "../host-plugins/dataset-common",
+        "to": "builtin-plugins/dataset.common",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../host-plugins/train_python",
+        "to": "builtin-plugins/train.python",
+        "filter": ["**/*", "!*.exe", "!.venv/**", "!build/**", "!dist/**"]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "logo.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "logo.ico",
+      "uninstallerIcon": "logo.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "EasyMark",
+      "include": "installer.nsh",
+      "artifactName": "EasyMark-Setup-${version}.${ext}",
+      "deleteAppDataOnUninstall": false,
+      "allowElevation": true,
+      "runAfterFinish": true
+    }
+  }
+}

@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YOLOE Visual Prompt</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    body.light { background: #f5f5f5; color: #333; }
+    .container { flex: 1; display: flex; flex-direction: column; padding: 12px; gap: 12px; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+    .container::-webkit-scrollbar { display: none; }
+    .section { background: #2a2a2a; border-radius: 8px; padding: 12px; }
+    body.light .section { background: #fff; border: 1px solid #e0e0e0; }
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .section-title { font-size: 12px; font-weight: 600; color: #a0a0a0; }
+    body.light .section-title { color: #666; }
+    .refresh-btn {
+      background: none; border: none; cursor: pointer; padding: 4px;
+      color: #888; border-radius: 4px; display: flex; align-items: center; justify-content: center;
+    }
+    .refresh-btn:hover { background: #333; color: #fff; }
+    body.light .refresh-btn:hover { background: #eee; color: #333; }
+    .refresh-btn.spinning svg { animation: spin 1s linear infinite; }
+    .model-selector { display: flex; flex-direction: column; gap: 6px; }
+    .model-item {
+      padding: 8px 12px; background: #333; border-radius: 6px;
+      cursor: pointer; transition: all 0.2s; font-size: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    body.light .model-item { background: #f8f8f8; border: 1px solid #e0e0e0; }
+    .model-item:hover { background: #3a3a3a; }
+    body.light .model-item:hover { background: #f0f0f0; }
+    .model-item.active { background: #4a7c59; color: #fff; }
+    body.light .model-item.active { background: #4caf50; color: #fff; border-color: #4caf50; }
+    .model-item.need-download { border: 1px dashed #666; opacity: 0.7; }
+    .model-item.downloading { background: #3a5a7c; color: #7db8e8; pointer-events: none; }
+    .model-icon { width: 8px; height: 8px; border-radius: 50%; background: #666; flex-shrink: 0; }
+    .model-item.active .model-icon { background: #fff; }
+    .model-item.need-download .model-icon { background: #f0ad4e; }
+    .model-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .model-badge { font-size: 9px; padding: 2px 6px; border-radius: 3px; background: #555; color: #aaa; }
+    .model-item.need-download .model-badge { background: #f0ad4e; color: #333; }
+    .model-item.downloading .model-badge { background: #3a5a7c; color: #7db8e8; }
+    .model-size { font-size: 10px; color: #888; }
+    .model-item.active .model-size { color: rgba(255, 255, 255, 0.7); }
+    .status { font-size: 11px; padding: 6px 10px; border-radius: 4px; text-align: center; }
+    .status.idle { background: #333; color: #888; }
+    body.light .status.idle { background: #f0f0f0; color: #666; }
+    .status.loading { background: #3a5a7c; color: #7db8e8; }
+    body.light .status.loading { background: #e3f2fd; color: #1976d2; }
+    .status.ready { background: #3a5a3a; color: #7db87d; }
+    body.light .status.ready { background: #e8f5e9; color: #4caf50; }
+    .status.error { background: #5a3a3a; color: #e87d7d; }
+    body.light .status.error { background: #ffebee; color: #f44336; }
+    .help-text { font-size: 11px; color: #888; line-height: 1.5; }
+    body.light .help-text { color: #999; }
+    .no-models { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+    .feature-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      background: #3a5a7c; color: #7db8e8; font-size: 10px; margin-bottom: 8px;
+    }
+    body.light .feature-badge { background: #e3f2fd; color: #1976d2; }
+    .loading-spinner {
+      display: inline-block; width: 12px; height: 12px;
+      border: 2px solid rgba(255, 255, 255, 0.3); border-top-color: #fff;
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    body.light .loading-spinner { border-color: rgba(0, 0, 0, 0.2); border-top-color: #333; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* 滑块样式 */
+    .slider-row { display: flex; align-items: center; gap: 8px; }
+    .slider-label { font-size: 11px; color: #888; min-width: 50px; }
+    body.light .slider-label { color: #666; }
+    .slider-value { font-size: 11px; color: #7db8e8; min-width: 36px; text-align: right; font-weight: 500; }
+    body.light .slider-value { color: #1976d2; }
+    .slider-input {
+      flex: 1; height: 4px; -webkit-appearance: none; appearance: none;
+      background: #444; border-radius: 2px; outline: none; cursor: pointer;
+    }
+    body.light .slider-input { background: #ddd; }
+    .slider-input::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 14px; height: 14px;
+      background: #7db8e8; border-radius: 50%; cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    body.light .slider-input::-webkit-slider-thumb { background: #1976d2; }
+    .slider-input::-moz-range-thumb {
+      width: 14px; height: 14px; background: #7db8e8; border-radius: 50%;
+      cursor: pointer; border: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 功能介绍 -->
+    <div class="section">
+      <span class="feature-badge">Visual Prompt</span>
+      <div class="help-text">
+        <b>框选一个目标</b>，自动检测图片中所有相似的目标
+      </div>
+    </div>
+
+    <!-- 模型选择 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">模型选择</div>
+        <button class="refresh-btn" id="refreshBtn" title="刷新模型列表">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+            <path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+            <path d="M16 21h5v-5"/>
+          </svg>
+        </button>
+      </div>
+      <div class="model-selector" id="modelSelector">
+        <div class="no-models">正在加载模型列表...</div>
+      </div>
+    </div>
+
+    <!-- 参数设置 -->
+    <div class="section">
+      <div class="section-title">参数设置</div>
+      <div class="slider-row" style="margin-top: 8px;">
+        <span class="slider-label">置信度</span>
+        <input type="range" class="slider-input" id="confSlider" min="0" max="100" value="30">
+        <span class="slider-value" id="confValue">0.30</span>
+      </div>
+    </div>
+
+    <!-- 使用说明 -->
+    <div class="section">
+      <div class="section-title">使用说明</div>
+      <div class="help-text">
+        1. 先在右侧选择一个<b>矩形框</b>类别<br>
+        2. 在图片上<b>框选</b>一个目标作为示例<br>
+        3. 模型会自动检测所有相似目标
+      </div>
+    </div>
+
+    <!-- 状态 -->
+    <div class="section">
+      <div class="section-title">状态</div>
+      <div class="status idle" id="status">未加载模型</div>
+    </div>
+  </div>
+
+  <script>
+    const PLUGIN_ID = 'infer.yoloe'
+    const API_BASE = 'http://localhost:18080'
+    
+    // 可用模型列表
+    const AVAILABLE_MODELS = [
+      { name: 'YOLOE-S (快速)', file: 'yoloe-11s-seg.pt', size: '~25MB', url: 'https://github.com/ultralytics/assets/releases/download/v8.3.0/yoloe-11s-seg.pt' },
+      { name: 'YOLOE-M (均衡)', file: 'yoloe-11m-seg.pt', size: '~50MB', url: 'https://github.com/ultralytics/assets/releases/download/v8.3.0/yoloe-11m-seg.pt' },
+      { name: 'YOLOE-L (精准)', file: 'yoloe-11l-seg.pt', size: '~90MB', url: 'https://github.com/ultralytics/assets/releases/download/v8.3.0/yoloe-11l-seg.pt' }
+    ]
+
+    let currentModel = null
+    let pluginFiles = []
+    let downloadingModels = new Set()
+    let requestIdCounter = 0
+    const pendingRequests = new Map()
+
+    // postMessage API 封装
+    function callParent(action, data = {}) {
+      return new Promise((resolve, reject) => {
+        const requestId = ++requestIdCounter
+        pendingRequests.set(requestId, { resolve, reject })
+        window.parent.postMessage({ type: 'plugin-ui-request', requestId, action, data }, '*')
+        setTimeout(() => {
+          if (pendingRequests.has(requestId)) {
+            pendingRequests.delete(requestId)
+            reject(new Error('请求超时，请重试'))
+          }
+        }, 35000)
+      })
+    }
+
+    // 监听消息
+    window.addEventListener('message', (event) => {
+      const msg = event.data
+      if (msg.type === 'plugin-ui-response' && msg.requestId) {
+        const pending = pendingRequests.get(msg.requestId)
+        if (pending) {
+          pendingRequests.delete(msg.requestId)
+          msg.success ? pending.resolve(msg.result) : pending.reject(new Error(msg.error || 'Unknown error'))
+        }
+      } else if (msg.type === 'theme-changed') {
+        applyTheme(msg.theme)
+      } else if (msg.type === 'model_download_progress') {
+        handleDownloadProgress(msg)
+      } else if (msg.type === 'model_download_complete') {
+        handleDownloadComplete(msg)
+      } else if (msg.type === 'model_download_error') {
+        handleDownloadError(msg)
+      }
+    })
+
+    function applyTheme(theme) {
+      document.body.classList.toggle('light', theme === 'light')
+    }
+
+    // 初始主题
+    const urlParams = new URLSearchParams(window.location.search)
+    applyTheme(urlParams.get('theme') || 'dark')
+
+    // 刷新按钮
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+      loadPluginFiles()
+    })
+
+    // 加载插件目录文件
+    async function loadPluginFiles() {
+      const btn = document.getElementById('refreshBtn')
+      btn.classList.add('spinning')
+      
+      try {
+        const resp = await fetch(`${API_BASE}/api/plugins/${PLUGIN_ID}/files`)
+        if (resp.ok) {
+          const data = await resp.json()
+          pluginFiles = data.files || []
+        }
+      } catch (e) {
+        console.error('Failed to load plugin files:', e)
+      } finally {
+        btn.classList.remove('spinning')
+        renderModels()
+      }
+    }
+
+    // 渲染模型列表
+    function renderModels() {
+      const selector = document.getElementById('modelSelector')
+      const existingFiles = pluginFiles.map(f => f.name)
+      
+      selector.innerHTML = AVAILABLE_MODELS.map(model => {
+        const exists = existingFiles.includes(model.file)
+        const downloading = downloadingModels.has(model.file)
+        const isActive = currentModel?.file === model.file
+        
+        let className = 'model-item'
+        let badge = ''
+        
+        if (isActive) {
+          className += ' active'
+          badge = '<span class="model-badge">已加载</span>'
+        } else if (downloading) {
+          className += ' downloading'
+          badge = `<span class="model-badge" id="progress-${model.file}">下载中...</span>`
+        } else if (!exists) {
+          className += ' need-download'
+          badge = '<span class="model-badge">需下载</span>'
+        }
+        
+        return `
+          <div class="${className}" data-file="${model.file}" data-exists="${exists}">
+            <div class="model-icon"></div>
+            <span class="model-name">${model.name}</span>
+            ${badge}
+            <span class="model-size">${model.size}</span>
+          </div>
+        `
+      }).join('')
+      
+      // 绑定点击事件
+      selector.querySelectorAll('.model-item').forEach(item => {
+        item.addEventListener('click', () => {
+          const file = item.dataset.file
+          const exists = item.dataset.exists === 'true'
+          const model = AVAILABLE_MODELS.find(m => m.file === file)
+          if (model) {
+            if (exists) {
+              selectModel(model)
+            } else {
+              downloadModel(model)
+            }
+          }
+        })
+      })
+    }
+
+    // 下载模型
+    async function downloadModel(model) {
+      if (downloadingModels.has(model.file)) return
+      
+      downloadingModels.add(model.file)
+      renderModels()
+      
+      try {
+        const resp = await fetch(`${API_BASE}/api/plugins/${PLUGIN_ID}/download-model`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: model.url, filename: model.file })
+        })
+        
+        if (!resp.ok) {
+          throw new Error('Download request failed')
+        }
+      } catch (e) {
+        console.error('Download error:', e)
+        downloadingModels.delete(model.file)
+        renderModels()
+        callParent('notify', { type: 'error', message: `下载失败: ${e.message}` })
+      }
+    }
+
+    // 处理下载进度
+    function handleDownloadProgress(msg) {
+      const data = msg.data || msg
+      const progressEl = document.getElementById(`progress-${data.filename}`)
+      if (progressEl) {
+        progressEl.textContent = `${data.progress}%`
+      }
+    }
+
+    // 处理下载完成
+    function handleDownloadComplete(msg) {
+      const data = msg.data || msg
+      downloadingModels.delete(data.filename)
+      loadPluginFiles()
+    }
+
+    // 处理下载错误
+    function handleDownloadError(msg) {
+      const data = msg.data || msg
+      downloadingModels.delete(data.filename)
+      renderModels()
+      // 主程序已统一处理通知，这里只更新 UI 状态
+    }
+
+    // 选择模型
+    async function selectModel(model) {
+      const status = document.getElementById('status')
+      try {
+        status.className = 'status loading'
+        status.innerHTML = '<span class="loading-spinner"></span> 正在加载模型...'
+        
+        const result = await callParent('loadModel', { path: model.file })
+        
+        if (result.success) {
+          currentModel = model
+          status.className = 'status ready'
+          status.textContent = '✓ 模型已就绪'
+          renderModels()
+          callParent('notifyModelChanged')
+        } else {
+          throw new Error(result.error || 'Unknown error')
+        }
+      } catch (e) {
+        console.error('Load model error:', e)
+        status.className = 'status error'
+        status.textContent = '✗ 加载失败: ' + e.message
+      }
+    }
+
+    // 置信度滑块
+    const confSlider = document.getElementById('confSlider')
+    const confValue = document.getElementById('confValue')
+    
+    confSlider.addEventListener('input', () => {
+      const val = confSlider.value / 100
+      confValue.textContent = val.toFixed(2)
+    })
+    
+    confSlider.addEventListener('change', () => {
+      const val = confSlider.value / 100
+      callParent('setParam', { key: 'conf', value: val })
+    })
+
+    // 初始化
+    loadPluginFiles()
+  </script>
+</body>
+</html>

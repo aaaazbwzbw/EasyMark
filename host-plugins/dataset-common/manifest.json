@@ -1,0 +1,39 @@
+{
+  "id": "dataset.common",
+  "name": "EasyMark Dataset Plugin",
+  "version": "1.1.0",
+  "type": "dataset",
+  "description": "Import and export datasets in COCO, YOLO, and Pascal VOC formats.",
+  "author": "EasyMark Team",
+  "entry": "common-importer",
+  "capabilities": {
+    "importFormats": ["coco", "yolo", "voc"],
+    "exportFormats": ["coco", "yolo", "voc"]
+  },
+  "paramsSchema": {
+    "type": "object",
+    "properties": {
+      "format": {
+        "type": "string",
+        "title": "Dataset Format",
+        "description": "Dataset format (auto-detected if not specified)",
+        "enum": ["auto", "coco", "yolo", "voc"]
+      },
+      "annotationFile": {
+        "type": "string",
+        "title": "Annotation File",
+        "description": "Path to annotation file (COCO JSON or VOC XML directory)"
+      },
+      "imagesDir": {
+        "type": "string",
+        "title": "Images Directory",
+        "description": "Directory containing the images"
+      },
+      "classesFile": {
+        "type": "string",
+        "title": "Classes File",
+        "description": "Path to classes file (YOLO: classes.txt, VOC: labelmap.txt)"
+      }
+    }
+  }
+}
