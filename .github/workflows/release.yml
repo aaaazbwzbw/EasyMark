@@ -47,12 +47,10 @@ jobs:
         run: go build -ldflags "-s -w" -o easymark-backend.exe .
         working-directory: ./backend-go
 
-      # 修正：使用 npx electron-builder 并明确指定平台
+      # 修正：使用 npx electron-builder 并明确指定平台（不自动发布）
       - name: Build with electron-builder
-        run: npx electron-builder --win --x64
+        run: npx electron-builder --win --x64 --publish never
         working-directory: ./host-electron
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # 上传安装包到 Release
       - name: Upload to Release
