@@ -37,9 +37,9 @@ EasyMark is a modern, high-performance annotation tool designed for computer vis
 
 <div align="center">
 
-<img src="docs/assets/demo1.gif" alt="EasyMark AI Segmentation Demo" width="80%">
+<img src="docs/assets/demo1.gif" alt="EasyMark AI Segmentation Demo" width="100%">
 <br>
-<img src="docs/assets/demo2.gif" alt="EasyMark Auto Detection Demo" width="80%">
+<img src="docs/assets/demo2.gif" alt="EasyMark Auto Detection Demo" width="100%">
 
 </div>
 
