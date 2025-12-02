@@ -24,6 +24,7 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: '1.21'
+          cache-dependency-path: backend-go/go.sum
       
       # 新增：安装所有依赖
       - name: Install All Dependencies
