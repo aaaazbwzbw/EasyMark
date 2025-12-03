@@ -3472,16 +3472,7 @@ const submitDeleteCategory = async () => {
             ></span>
           </span>
         </button>
-        <button
-          type="button"
-          class="app-sidebar__item"
-          :class="{ 'app-sidebar__item--active': route.path === '/ui' }"
-          :aria-label="t('sidebar.ui')"
-          :title="t('sidebar.ui')"
-          @click="handleNavigateToUi"
-        >
-          <Palette :size="22" />
-        </button>
+        <!-- UI 按钮已隐藏 -->
         <!-- 底部图标占位 -->
         <div class="app-sidebar__spacer"></div>
         <!-- 帮助 -->
