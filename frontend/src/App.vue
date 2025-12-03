@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { 
-  Folder, Database, Bot, Puzzle, Palette, HelpCircle, Github,
+  Folder, Database, Bot, Puzzle, HelpCircle, Github,
   Settings, Minus, Square, X, Bell, Import, ImagePlus, ChevronDown,
   Trash2, ImageOff, FilterX, Save, Pencil, Loader2, Plus, List, Clock, ArrowUp
 } from 'lucide-vue-next'
@@ -2118,11 +2118,6 @@ const handleSidebarClick = (section: SidebarSection) => {
     help: '/help'
   }
   router.push(pathMap[section])
-}
-
-const handleNavigateToUi = () => {
-  handleCloseSettings()
-  router.push('/ui')
 }
 
 const handleOpenGitHub = () => {
