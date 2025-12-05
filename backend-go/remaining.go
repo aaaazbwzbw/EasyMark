@@ -926,12 +926,75 @@ func handlePluginInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 绉诲姩鍒版彃浠剁洰褰?
+	// 移动到插件目录
 	destDir := filepath.Join(pluginsDir, manifest.ID)
-	// 濡傛灉宸插瓨鍦紝鍏堝垹闄?
-	_ = os.RemoveAll(destDir)
+
+	// 如果已存在，保留模型文件后再删除其他文件
+	var modelFiles []string
+	if _, err := os.Stat(destDir); err == nil {
+		// 扫描现有的模型文件
+		modelExts := map[string]bool{".pt": true, ".pth": true, ".onnx": true, ".safetensors": true, ".bin": true}
+		filepath.WalkDir(destDir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			ext := strings.ToLower(filepath.Ext(d.Name()))
+			if modelExts[ext] {
+				relPath, _ := filepath.Rel(destDir, path)
+				modelFiles = append(modelFiles, relPath)
+			}
+			return nil
+		})
+
+		if len(modelFiles) > 0 {
+			log.Printf("[Plugin Install] Found %d model files to preserve: %v", len(modelFiles), modelFiles)
+			// 创建临时目录保存模型文件
+			modelTempDir, err := os.MkdirTemp("", "plugin-models-*")
+			if err == nil {
+				defer os.RemoveAll(modelTempDir)
+				// 移动模型文件到临时目录
+				for _, relPath := range modelFiles {
+					srcPath := filepath.Join(destDir, relPath)
+					dstPath := filepath.Join(modelTempDir, relPath)
+					os.MkdirAll(filepath.Dir(dstPath), 0755)
+					os.Rename(srcPath, dstPath)
+				}
+				// 删除旧插件目录
+				os.RemoveAll(destDir)
+				// 安装新插件
+				if err := os.Rename(pluginRoot, destDir); err != nil {
+					if err := copyDir(pluginRoot, destDir); err != nil {
+						log.Printf("copy plugin error: %v", err)
+						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(http.StatusInternalServerError)
+						_, _ = w.Write([]byte(`{"error":"install_failed"}`))
+						return
+					}
+				}
+				// 恢复模型文件
+				for _, relPath := range modelFiles {
+					srcPath := filepath.Join(modelTempDir, relPath)
+					dstPath := filepath.Join(destDir, relPath)
+					os.MkdirAll(filepath.Dir(dstPath), 0755)
+					os.Rename(srcPath, dstPath)
+				}
+				log.Printf("[Plugin Install] Restored %d model files", len(modelFiles))
+
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"success":         true,
+					"plugin":          manifest,
+					"modelsPreserved": len(modelFiles),
+				})
+				return
+			}
+		}
+		// 无模型文件或临时目录创建失败，直接删除
+		os.RemoveAll(destDir)
+	}
+
 	if err := os.Rename(pluginRoot, destDir); err != nil {
-		// rename 鍙兘璺ㄧ鐩樺け璐ワ紝鏀圭敤澶嶅埗
+		// rename 可能跨磁盘失败，改用复制
 		if err := copyDir(pluginRoot, destDir); err != nil {
 			log.Printf("copy plugin error: %v", err)
 			w.Header().Set("Content-Type", "application/json")
@@ -3821,24 +3884,39 @@ var standardModelURLs = map[string]string{
 	"yolov8m-seg": "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8m-seg.pt",
 	"yolov8l-seg": "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8l-seg.pt",
 	"yolov8x-seg": "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8x-seg.pt",
-	// YOLOv11 Detection
-	"yolo11n": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt",
-	"yolo11s": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s.pt",
-	"yolo11m": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11m.pt",
-	"yolo11l": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11l.pt",
-	"yolo11x": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11x.pt",
+	// YOLOv11 Detection (支持 yolov11 和 yolo11 两种格式)
+	"yolo11n":  "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt",
+	"yolo11s":  "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s.pt",
+	"yolo11m":  "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11m.pt",
+	"yolo11l":  "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11l.pt",
+	"yolo11x":  "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11x.pt",
+	"yolov11n": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt",
+	"yolov11s": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s.pt",
+	"yolov11m": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11m.pt",
+	"yolov11l": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11l.pt",
+	"yolov11x": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11x.pt",
 	// YOLOv11 Pose
-	"yolo11n-pose": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n-pose.pt",
-	"yolo11s-pose": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s-pose.pt",
-	"yolo11m-pose": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11m-pose.pt",
-	"yolo11l-pose": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11l-pose.pt",
-	"yolo11x-pose": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11x-pose.pt",
+	"yolo11n-pose":  "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n-pose.pt",
+	"yolo11s-pose":  "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s-pose.pt",
+	"yolo11m-pose":  "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11m-pose.pt",
+	"yolo11l-pose":  "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11l-pose.pt",
+	"yolo11x-pose":  "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11x-pose.pt",
+	"yolov11n-pose": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n-pose.pt",
+	"yolov11s-pose": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s-pose.pt",
+	"yolov11m-pose": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11m-pose.pt",
+	"yolov11l-pose": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11l-pose.pt",
+	"yolov11x-pose": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11x-pose.pt",
 	// YOLOv11 Seg
-	"yolo11n-seg": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n-seg.pt",
-	"yolo11s-seg": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s-seg.pt",
-	"yolo11m-seg": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11m-seg.pt",
-	"yolo11l-seg": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11l-seg.pt",
-	"yolo11x-seg": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11x-seg.pt",
+	"yolo11n-seg":  "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n-seg.pt",
+	"yolo11s-seg":  "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s-seg.pt",
+	"yolo11m-seg":  "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11m-seg.pt",
+	"yolo11l-seg":  "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11l-seg.pt",
+	"yolo11x-seg":  "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11x-seg.pt",
+	"yolov11n-seg": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n-seg.pt",
+	"yolov11s-seg": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s-seg.pt",
+	"yolov11m-seg": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11m-seg.pt",
+	"yolov11l-seg": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11l-seg.pt",
+	"yolov11x-seg": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11x-seg.pt",
 	// YOLOv5 Detection
 	"yolov5n": "https://github.com/ultralytics/yolov5/releases/download/v7.0/yolov5n.pt",
 	"yolov5s": "https://github.com/ultralytics/yolov5/releases/download/v7.0/yolov5s.pt",
@@ -4221,6 +4299,7 @@ func downloadModelFile(modelID, url, filePath string) {
 	}
 
 	total := resp.ContentLength
+	log.Printf("[Model] Download started: %s, Content-Length: %d, Status: %d", modelID, total, resp.StatusCode)
 	updateProgress("downloading", 0, 0, total, "")
 
 	// 鍒涘缓涓存椂鏂囦欢
@@ -4249,11 +4328,17 @@ func downloadModelFile(modelID, url, filePath string) {
 			}
 			downloaded += int64(n)
 
-			// 姣?500ms 鏇存柊涓€娆¤繘搴?
+			// 每 500ms 更新一次进度
 			if time.Since(lastReport) > 500*time.Millisecond {
-				progress := float64(downloaded) / float64(total)
-				if total <= 0 {
-					progress = 0
+				var progress float64
+				if total > 0 {
+					progress = float64(downloaded) / float64(total)
+				} else {
+					// Content-Length 未知时，根据已下载大小估算（假设模型约 10MB）
+					progress = float64(downloaded) / float64(10*1024*1024)
+					if progress > 0.99 {
+						progress = 0.99 // 未知大小时最多显示 99%
+					}
 				}
 				updateProgress("downloading", progress, downloaded, total, "")
 				lastReport = time.Now()
@@ -4358,6 +4443,7 @@ func handleModelStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"downloads":      downloads,
 		"existingModels": existingModels,
+		"modelsDir":      modelsDir,
 	})
 }
 

@@ -77,7 +77,11 @@ const props = defineProps<{
   selectedCategory: ProjectCategory | null // 主类别（bbox 或 polygon）
   selectedKeypointCategory: ProjectCategory | null // 副类别（keypoint），可选
   annotations: Annotation[]
+  classificationTags?: { id: number; name: string }[] // 分类标签列表
 }>()
+
+// 计算当前图片的分类标签（用于显示）
+const displayClassificationTags = computed(() => props.classificationTags || [])
 
 const emit = defineEmits<{
   (e: 'update:annotations', annotations: Annotation[]): void
@@ -1548,6 +1552,15 @@ defineExpose({
       <canvas ref="canvasRef" class="annotation-canvas"></canvas>
       <img ref="imageRef" :src="imageUrl" style="display: none" @load="onImageLoad" />
       
+      <!-- 分类标签显示（右上角） -->
+      <div v-if="displayClassificationTags.length > 0" class="classification-tags">
+        <span
+          v-for="tag in displayClassificationTags"
+          :key="tag.id"
+          class="classification-tags__item"
+        >{{ tag.name }}</span>
+      </div>
+      
       <!-- 右键菜单 -->
       <div v-if="isContextMenuOpen" class="annotation-context-menu" :style="{ left: contextMenuX + 'px', top: contextMenuY + 'px' }">
         <button type="button" class="annotation-context-menu__item" @click="handleDeleteFromContextMenu">
@@ -1706,5 +1719,27 @@ defineExpose({
 
 .annotation-context-menu__item:hover {
   background: var(--color-bg-sidebar-hover);
+}
+
+/* 分类标签显示（右上角） */
+.classification-tags {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 50%;
+  z-index: 10;
+}
+
+.classification-tags__item {
+  padding: 2px 8px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 0.7rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 </style>

@@ -11,12 +11,8 @@
 
 ; ========== 最早期初始化 ==========
 !macro preInit
-  ; 设置默认安装路径
-  ${If} ${FileExists} "D:\"
-    StrCpy $INSTDIR "D:\EasyMark"
-  ${Else}
-    StrCpy $INSTDIR "C:\EasyMark"
-  ${EndIf}
+  ; 设置默认安装路径为用户目录，避免 Program Files 权限问题
+  StrCpy $INSTDIR "$PROFILE\EasyMark"
 !macroend
 
 ; ========== 安装前初始化 ==========
@@ -29,12 +25,8 @@
       Goto initDone
   ${EndIf}
   
-  ; 确保默认路径正确
-  ${If} ${FileExists} "D:\"
-    StrCpy $INSTDIR "D:\EasyMark"
-  ${Else}
-    StrCpy $INSTDIR "C:\EasyMark"
-  ${EndIf}
+  ; 确保默认路径正确（用户目录）
+  StrCpy $INSTDIR "$PROFILE\EasyMark"
   
   initDone:
 !macroend
@@ -72,12 +64,8 @@
   ; 读取用户数据路径（如果存在）
   ReadRegStr $0 HKCU "${INSTALL_REG_KEY}" "DataPath"
   ${If} $0 == ""
-    ; 默认数据路径
-    ${If} ${FileExists} "D:\"
-      WriteRegStr HKCU "${INSTALL_REG_KEY}" "DataPath" "D:\EasyMark\Data"
-    ${Else}
-      WriteRegStr HKCU "${INSTALL_REG_KEY}" "DataPath" "C:\EasyMark\Data"
-    ${EndIf}
+    ; 默认数据路径（安装目录下的 Data 子目录）
+    WriteRegStr HKCU "${INSTALL_REG_KEY}" "DataPath" "$INSTDIR\Data"
   ${EndIf}
 !macroend
 

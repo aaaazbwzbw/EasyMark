@@ -3,7 +3,7 @@ import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { 
   Folder, Database, Bot, Puzzle, HelpCircle, Github,
   Settings, Minus, Square, X, Bell, Import, ImagePlus, ChevronDown,
-  Trash2, ImageOff, FilterX, Save, Pencil, Loader2, Plus, List, Clock, ArrowUp
+  Trash2, ImageOff, FilterX, Save, Pencil, Loader2, Plus, List, Check, ArrowUp
 } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -1097,6 +1097,9 @@ const handleSelectCategory = (cat: ProjectCategory) => {
 		} else {
 			selectedKeypointCategory.value = cat
 		}
+	} else if (cat.type === 'category') {
+		// 分类类别：多选切换
+		toggleClassificationTag(cat.id)
 	} else {
 		// 点击 bbox/polygon 类别
 		if (selectedCategory.value?.id === cat.id) {
@@ -1109,6 +1112,85 @@ const handleSelectCategory = (cat: ProjectCategory) => {
 			}
 		}
 	}
+}
+
+// 分类标签：当前图片已选中的分类类别ID列表
+const selectedClassificationIds = computed<number[]>(() => {
+	// 从当前标注中提取分类标签
+	return currentAnnotations.value
+		.filter(a => a.type === 'category')
+		.map(a => a.categoryId)
+})
+
+// 分类标签：用于在canvas右上角显示
+const classificationTagsForDisplay = computed(() => {
+	return selectedClassificationIds.value
+		.map(id => {
+			const cat = projectCategories.value.find(c => c.id === id && c.type === 'category')
+			return cat ? { id: cat.id, name: cat.name } : null
+		})
+		.filter((t): t is { id: number; name: string } => t !== null)
+})
+
+// 切换分类标签
+const toggleClassificationTag = async (categoryId: number) => {
+	if (!currentProject.value || !activeImage.value) return
+	
+	const isSelected = selectedClassificationIds.value.includes(categoryId)
+	
+	if (isSelected) {
+		// 取消选中：删除该分类标注
+		const annToDelete = currentAnnotations.value.find(
+			a => a.type === 'category' && a.categoryId === categoryId
+		)
+		if (annToDelete && annToDelete.dbId) {
+			try {
+				const resp = await fetch(`http://127.0.0.1:18080/api/annotations/${annToDelete.dbId}?projectId=${currentProject.value.id}`, {
+					method: 'DELETE'
+				})
+				if (resp.ok) {
+					currentAnnotations.value = currentAnnotations.value.filter(a => a.id !== annToDelete.id)
+				}
+			} catch (e) {
+				console.error('delete classification tag error', e)
+			}
+		} else if (annToDelete) {
+			// 仅本地删除
+			currentAnnotations.value = currentAnnotations.value.filter(a => a.id !== annToDelete.id)
+		}
+	} else {
+		// 选中：添加分类标注
+		const newAnn = {
+			id: `cls-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+			imageId: activeImage.value.id,
+			categoryId: categoryId,
+			type: 'category' as const,
+			data: {}
+		} as Annotation
+		// 保存到数据库
+		try {
+			const resp = await fetch('http://127.0.0.1:18080/api/annotations', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					imageId: activeImage.value.id,
+					categoryId: categoryId,
+					type: 'category',
+					data: {}
+				})
+			})
+			if (resp.ok) {
+				const result = await resp.json()
+				newAnn.dbId = result.id
+			}
+		} catch (e) {
+			console.error('save classification tag error', e)
+		}
+		currentAnnotations.value.push(newAnn)
+	}
+	
+	// 刷新图片列表状态
+	await loadProjectImages()
 }
 
 const handleAnnotationNotify = (payload: { type: 'info' | 'warning' | 'error'; message: string }) => {
@@ -2184,6 +2266,50 @@ const inferenceConf = ref(0.3)
 const inferenceIou = ref(0.5)
 const autoInference = ref(true)  // 切图时自动推理
 const isInferring = ref(false)
+const continuousMode = ref(false)  // 连续标注模式（SAM-2用）
+
+// 计算两个标注的IoU（用于连续标注模式）
+const computeIoU = (a: Annotation, b: Annotation): number => {
+  // 获取两个标注的边界框
+  const boxA = getAnnotationBBox(a)
+  const boxB = getAnnotationBBox(b)
+  if (!boxA || !boxB) return 0
+  
+  // 计算交集
+  const x1 = Math.max(boxA.x, boxB.x)
+  const y1 = Math.max(boxA.y, boxB.y)
+  const x2 = Math.min(boxA.x + boxA.w, boxB.x + boxB.w)
+  const y2 = Math.min(boxA.y + boxA.h, boxB.y + boxB.h)
+  
+  if (x2 <= x1 || y2 <= y1) return 0
+  
+  const intersection = (x2 - x1) * (y2 - y1)
+  const areaA = boxA.w * boxA.h
+  const areaB = boxB.w * boxB.h
+  const union = areaA + areaB - intersection
+  
+  return union > 0 ? intersection / union : 0
+}
+
+// 获取标注的边界框（归一化坐标）
+const getAnnotationBBox = (ann: Annotation): { x: number; y: number; w: number; h: number } | null => {
+  if (ann.type === 'bbox') {
+    const d = ann.data as { x: number; y: number; width: number; height: number }
+    return { x: d.x, y: d.y, w: d.width, h: d.height }
+  } else if (ann.type === 'polygon') {
+    const d = ann.data as { points: [number, number][] }
+    if (!d.points?.length) return null
+    let minX = 1, minY = 1, maxX = 0, maxY = 0
+    for (const [px, py] of d.points) {
+      minX = Math.min(minX, px)
+      minY = Math.min(minY, py)
+      maxX = Math.max(maxX, px)
+      maxY = Math.max(maxY, py)
+    }
+    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+  }
+  return null
+}
 
 // 处理推理结果（NMS + 过滤 + 合并）
 const processInferenceResults = (results: InferenceAnnotation[]) => {
@@ -2338,8 +2464,25 @@ const runPromptInference = async (points: Array<{x: number; y: number; type: 'po
           }
         }
       })
-      // 移除旧的推理结果，添加新的
-      currentAnnotations.value = [...currentAnnotations.value.filter(a => !a.isInference), ...newAnns]
+      
+      // 连续标注模式：保留与新标注不重叠的已有推理结果
+      if (continuousMode.value) {
+        const existingInferences = currentAnnotations.value.filter(a => a.isInference)
+        const nonOverlapping = existingInferences.filter(existing => {
+          // 检查是否与任何新标注高度重叠
+          return !newAnns.some(newAnn => computeIoU(existing, newAnn) > 0.5)
+        })
+        // 保留非推理标注 + 非重叠的旧推理 + 新推理
+        currentAnnotations.value = [
+          ...currentAnnotations.value.filter(a => !a.isInference),
+          ...nonOverlapping,
+          ...newAnns
+        ]
+        console.log('[App] SAM-2 continuous mode: kept', nonOverlapping.length, 'old inferences, added', newAnns.length, 'new')
+      } else {
+        // 普通模式：移除旧的推理结果，添加新的
+        currentAnnotations.value = [...currentAnnotations.value.filter(a => !a.isInference), ...newAnns]
+      }
       console.log('[App] SAM-2 inference added:', newAnns.length, 'annotations with category:', categoryId, 'type:', categoryType)
     } else if (!result?.success) {
       console.warn('[App] Prompt inference failed:', result?.error)
@@ -2558,6 +2701,11 @@ onMounted(() => {
       // 支持部分更新
       if (params.conf !== undefined) inferenceConf.value = params.conf
       if (params.iou !== undefined) inferenceIou.value = params.iou
+      if (params.continuousMode !== undefined) {
+        continuousMode.value = params.continuousMode
+        console.log('[App] Continuous mode:', params.continuousMode)
+        return  // 连续标注模式变化不触发重新推理
+      }
       // 用新参数重新推理当前图片（box 模式不自动推理）
       if (activePlugin.value?.interactionMode !== 'box') {
         runInference()
@@ -2816,6 +2964,8 @@ const submitCreateCategory = async () => {
 		return
 	}
 	const type: CategoryType = activeCategoryTab.value
+	// 分类类别不需要颜色，使用默认灰色
+	const color = type === 'category' ? '#808080' : newCategoryColor.value
 	try {
 		const resp = await fetch('http://127.0.0.1:18080/api/project-categories', {
 			method: 'POST',
@@ -2824,7 +2974,7 @@ const submitCreateCategory = async () => {
 				projectId: currentProject.value.id,
 				name,
 				type,
-				color: newCategoryColor.value
+				color
 			})
 		})
 		if (!resp.ok) {
@@ -3698,6 +3848,7 @@ const submitDeleteCategory = async () => {
                 :selected-category="selectedCategory"
                 :selected-keypoint-category="selectedKeypointCategory"
                 :annotations="currentAnnotations"
+                :classification-tags="classificationTagsForDisplay"
                 @update:annotations="currentAnnotations = $event"
                 @save="handleSaveAnnotations"
                 @save-as-negative="handleSaveAsNegative"
@@ -3750,14 +3901,6 @@ const submitDeleteCategory = async () => {
 		          </div>
                 </div>
                 <div class="category-panel__body">
-                  <!-- 分类类别：占位图 -->
-                  <div v-if="activeCategoryTab === 'category'" class="category-panel__coming-soon">
-                    <Clock :size="36" class="category-panel__coming-soon-icon" />
-                    <p class="category-panel__coming-soon-title">{{ t('project.categoryPanel.comingSoon') }}</p>
-                    <p class="category-panel__coming-soon-desc">{{ t('project.categoryPanel.comingSoonDesc') }}</p>
-                  </div>
-                  <!-- 边界框/多边形类别 -->
-                  <template v-else>
 				  <div class="category-panel__body-header">
 					<button
 					  type="button"
@@ -3773,36 +3916,40 @@ const submitDeleteCategory = async () => {
 					ref="categoryEditorRef"
 					class="category-editor-card"
 				  >
-					<button
-					  ref="categoryColorButtonRef"
-					  type="button"
-					  class="category-editor-card__color"
-					  :style="{ backgroundColor: newCategoryColor }"
-					  @click.stop="handleCategoryColorClick"
-					>
-					</button>
-					<div v-if="isCategoryColorPickerOpen" class="category-color-palette">
-					  <input
-					    type="color"
-					    class="category-color-palette__native"
-					    :value="newCategoryColor"
-					    @input.stop="handleNativeColorChange"
-					  />
-					  <div class="category-color-palette__swatches">
-					    <button
-					      v-for="color in presetCategoryColors"
-					      :key="color"
-					      type="button"
-					      class="category-color-palette__color"
-					      :style="{ backgroundColor: color }"
-					      @click.stop="selectPresetCategoryColor(color)"
-					    ></button>
+					<!-- 分类类别不需要颜色选择器 -->
+					<template v-if="activeCategoryTab !== 'category'">
+					  <button
+					    ref="categoryColorButtonRef"
+					    type="button"
+					    class="category-editor-card__color"
+					    :style="{ backgroundColor: newCategoryColor }"
+					    @click.stop="handleCategoryColorClick"
+					  >
+					  </button>
+					  <div v-if="isCategoryColorPickerOpen" class="category-color-palette">
+					    <input
+					      type="color"
+					      class="category-color-palette__native"
+					      :value="newCategoryColor"
+					      @input.stop="handleNativeColorChange"
+					    />
+					    <div class="category-color-palette__swatches">
+					      <button
+					        v-for="color in presetCategoryColors"
+					        :key="color"
+					        type="button"
+					        class="category-color-palette__color"
+					        :style="{ backgroundColor: color }"
+					        @click.stop="selectPresetCategoryColor(color)"
+					      ></button>
+					    </div>
 					  </div>
-					</div>
+					</template>
 					<input
 					  v-model="newCategoryName"
 					  type="text"
 					  class="category-editor-card__input"
+					  :class="{ 'category-editor-card__input--full': activeCategoryTab === 'category' }"
 					  :placeholder="t('project.categoryPanel.namePlaceholder')"
 					  @keyup.enter.stop="submitCreateCategory"
 					/>
@@ -3849,32 +3996,44 @@ const submitDeleteCategory = async () => {
 					  @dragend="handleCategoryDragEnd"
 					  @contextmenu="(e) => openCategoryContextMenu(e as MouseEvent, cat)"
 					>
-					  <span
-					    class="category-list-item__color"
-					    :style="{ backgroundColor: cat.color }"
-					    @click.stop="openEditCategoryFromColor(cat)"
-					  ></span>
-					  <div
-					    v-if="editCategoryTarget && editCategoryTarget.id === cat.id && isEditCategoryColorPickerOpen"
-					    class="category-color-palette"
-					  >
-					    <input
-					      type="color"
-					      class="category-color-palette__native"
-					      :value="editCategoryColor"
-					      @input.stop="handleEditNativeColorChange"
-					    />
-					    <div class="category-color-palette__swatches">
-					      <button
-					        v-for="color in presetCategoryColors"
-					        :key="color"
-					        type="button"
-					        class="category-color-palette__color"
-					        :style="{ backgroundColor: color }"
-					        @click.stop="selectPresetEditCategoryColor(color)"
-					      ></button>
+					  <!-- 分类类别显示复选框 -->
+					  <template v-if="cat.type === 'category'">
+					    <span
+					      class="category-list-item__checkbox"
+					      :class="{ 'category-list-item__checkbox--checked': selectedClassificationIds.includes(cat.id) }"
+					    >
+					      <Check v-if="selectedClassificationIds.includes(cat.id)" :size="12" />
+					    </span>
+					  </template>
+					  <!-- 其他类别显示颜色块 -->
+					  <template v-else>
+					    <span
+					      class="category-list-item__color"
+					      :style="{ backgroundColor: cat.color }"
+					      @click.stop="openEditCategoryFromColor(cat)"
+					    ></span>
+					    <div
+					      v-if="editCategoryTarget && editCategoryTarget.id === cat.id && isEditCategoryColorPickerOpen"
+					      class="category-color-palette"
+					    >
+					      <input
+					        type="color"
+					        class="category-color-palette__native"
+					        :value="editCategoryColor"
+					        @input.stop="handleEditNativeColorChange"
+					      />
+					      <div class="category-color-palette__swatches">
+					        <button
+					          v-for="color in presetCategoryColors"
+					          :key="color"
+					          type="button"
+					          class="category-color-palette__color"
+					          :style="{ backgroundColor: color }"
+					          @click.stop="selectPresetEditCategoryColor(color)"
+					        ></button>
+					      </div>
 					    </div>
-					  </div>
+					  </template>
 					  <span
 					    v-if="!(editCategoryTarget && editCategoryTarget.id === cat.id && isEditingCategoryName)"
 					    class="category-list-item__name"
@@ -3937,7 +4096,6 @@ const submitDeleteCategory = async () => {
 				      </button>
 				    </div>
 				  </div>
-                  </template>
                 </div>
               </div>
             </aside>

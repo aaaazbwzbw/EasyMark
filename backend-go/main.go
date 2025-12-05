@@ -24,6 +24,8 @@ func main() {
 	mux.HandleFunc("/api/project-categories/sort", handleSortProjectCategories)
 	mux.HandleFunc("/api/project-annotations", handleProjectAnnotations)
 	mux.HandleFunc("/api/project-annotations/save", handleSaveAnnotations)
+	mux.HandleFunc("/api/annotations", handleAnnotations)
+	mux.HandleFunc("/api/annotations/", handleAnnotations)
 	// 插件管理
 	mux.HandleFunc("/api/plugins", handlePlugins)
 	mux.HandleFunc("/api/plugins/install", handlePluginInstall)

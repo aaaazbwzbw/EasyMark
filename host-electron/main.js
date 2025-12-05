@@ -239,8 +239,10 @@ function createWindow() {
     mainWindow.loadURL(devUrl)
   }
 
-  // 当主窗口关闭时，如有推理小窗则一并关闭
+  // 当主窗口关闭时，先停止推理进程，再关闭推理小窗
   mainWindow.on('closed', () => {
+    // 先停止推理进程，避免进程尝试向已销毁的窗口发送消息
+    stopInferProcess()
     mainWindow = null
     if (inferenceWindow && !inferenceWindow.isDestroyed()) {
       inferenceWindow.close()
@@ -415,8 +417,12 @@ function createInferenceWindow(theme = 'dark', locale = 'zh-CN', pluginId = '') 
   inferenceWindow.on('closed', () => {
     inferenceWindow = null
     // 通知主窗口小窗已关闭
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('inference-window-closed')
+    try {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('inference-window-closed')
+      }
+    } catch (e) {
+      // 窗口可能已被销毁，忽略错误
     }
   })
 }

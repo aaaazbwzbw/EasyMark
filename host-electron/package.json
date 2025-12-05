@@ -1,6 +1,6 @@
 {
   "name": "easymark",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "EasyMark - 计算机视觉标注工具",
   "repository": {
     "type": "git",

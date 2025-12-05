@@ -92,8 +92,8 @@ declare global {
       inferenceServiceStatus: () => Promise<{ running: boolean }>
       
       // 小窗通知主窗口参数变化
-      notifyInferenceParamsChanged: (params: { conf: number; iou: number }) => void
-      onInferenceParamsChanged: (callback: (params: { conf: number; iou: number }) => void) => void
+      notifyInferenceParamsChanged: (params: { conf?: number; iou?: number; continuousMode?: boolean }) => void
+      onInferenceParamsChanged: (callback: (params: { conf?: number; iou?: number; continuousMode?: boolean }) => void) => void
       
       // 小窗通知主窗口模型变化
       notifyInferenceModelChanged: () => void

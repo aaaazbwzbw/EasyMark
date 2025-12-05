@@ -294,6 +294,11 @@ const handlePluginMessage = async (event: MessageEvent) => {
         window.electronAPI?.showNotification?.(data.type, data.message)
         break
         
+      case 'setContinuousMode':
+        // 设置连续标注模式
+        window.electronAPI?.notifyInferenceParamsChanged?.({ continuousMode: data.enabled })
+        break
+        
       default:
         result = { success: false, error: `Unknown action: ${action}` }
     }

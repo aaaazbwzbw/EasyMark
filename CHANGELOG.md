@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1] - 2025-12-05
+
+### Added
+- **Classification Category Annotation**
+  - Added annotation logic for classification categories
+  - Import/export for classification datasets will be improved in future versions (feedback on commonly used classification models and data formats is welcome)
+
+### Fixed
+- Fixed incorrect path passed when clicking the "Open Model Download Directory" button in the training panel
+- Fixed YOLOv11 series model download failure issue (modelId format mismatch)
+- Fixed incomplete built-in format conversion plugin issue (exe file was not uploaded)
+
+---
+
 ## [1.0.0] - 2025-12-02
 
 > **EasyMark** is the first release after a complete rewrite of **YoloMarkFlow**.

@@ -3,6 +3,10 @@ DEV_NOTES.md
 docs/使用.md
 docs/OpenSourceChecklist.md
 
+# ========== 私有插件（不公开） ==========
+host-plugins/dataset-uimodel/
+host-plugins/infer-plugins/fastsam/
+
 # ========== 通用 ==========
 # 日志文件
 *.log
@@ -48,6 +52,8 @@ backend-go/backup/
 
 # ========== 插件编译产物 ==========
 host-plugins/**/*.exe
+# 内置插件的 exe 需要保留（用于 GitHub Actions 构建）
+!host-plugins/dataset-common/*.exe
 
 # ========== Python 插件 ==========
 # Python 缓存

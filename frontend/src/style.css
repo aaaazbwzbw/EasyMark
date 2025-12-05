@@ -568,6 +568,25 @@ a {
 	border-color: rgba(148, 163, 184, 0.8);
 }
 
+/* 分类类别复选框样式 */
+.category-list-item__checkbox {
+	width: 14px;
+	height: 14px;
+	border-radius: 3px;
+	border: 1px solid var(--color-border-subtle);
+	background-color: transparent;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.category-list-item__checkbox--checked {
+	background-color: var(--color-accent);
+	border-color: var(--color-accent);
+	color: #fff;
+}
+
 .category-list-item__name {
 	flex: 1;
 	min-width: 0;
@@ -653,6 +672,10 @@ a {
 	outline: none;
 	border-color: var(--color-accent);
 	box-shadow: 0 0 0 1px var(--color-accent-soft);
+}
+
+.category-editor-card__input--full {
+	flex: 1;
 }
 
 .category-editor-card__confirm {

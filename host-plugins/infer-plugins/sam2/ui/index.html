@@ -125,6 +125,21 @@
       </div>
     </div>
 
+    <!-- 设置 -->
+    <div class="section">
+      <div class="section-title">设置</div>
+      <div class="switch-row">
+        <span class="switch-label">连续标注</span>
+        <label class="switch">
+          <input type="checkbox" id="continuousMode">
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+      <div class="help-text" style="margin-top: 4px; font-size: 10px;">
+        开启后，新分割结果与已有标注不重叠时将保留已有标注
+      </div>
+    </div>
+
     <!-- 使用说明 -->
     <div class="section">
       <div class="section-title">使用说明</div>
@@ -346,6 +361,25 @@
         status.textContent = '✗ 加载失败: ' + e.message
       }
     }
+
+    // 连续标注模式
+    const continuousModeCheckbox = document.getElementById('continuousMode')
+    
+    // 从 localStorage 加载设置
+    const savedContinuousMode = localStorage.getItem('sam2_continuous_mode') === 'true'
+    continuousModeCheckbox.checked = savedContinuousMode
+    
+    // 开关变化时保存并通知主程序
+    continuousModeCheckbox.addEventListener('change', () => {
+      const enabled = continuousModeCheckbox.checked
+      localStorage.setItem('sam2_continuous_mode', enabled.toString())
+      callParent('setContinuousMode', { enabled })
+    })
+    
+    // 初始化时通知主程序当前设置
+    setTimeout(() => {
+      callParent('setContinuousMode', { enabled: savedContinuousMode })
+    }, 100)
 
     // 初始化
     loadPluginFiles()

@@ -1835,9 +1835,20 @@ const checkModelStatus = async () => {
 }
 
 // 打开模型目录
-const openModelsDir = () => {
-  const api = (window as any)?.electronAPI
-  if (api?.openPath) api.openPath('models')
+const openModelsDir = async () => {
+  try {
+    // 从 API 获取模型目录路径
+    const resp = await fetch('http://localhost:18080/api/training/model-status')
+    if (resp.ok) {
+      const data = await resp.json()
+      if (data.modelsDir) {
+        const api = (window as any)?.electronAPI
+        if (api?.openPath) api.openPath(data.modelsDir)
+      }
+    }
+  } catch (e) {
+    console.error('Failed to get models dir:', e)
+  }
 }
 
 // 下载模型 - 使用通知组件显示进度
