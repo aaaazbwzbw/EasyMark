@@ -4,7 +4,7 @@
 
 <img src="docs/assets/logo.png" alt="EasyMark Logo" width="120">
 
-**Professional Computer Vision Annotation Tool**
+**专业的计算机视觉标注工具**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows-blue.svg)]()
@@ -14,26 +14,32 @@
 [![Latest Release](https://img.shields.io/github/v/release/aaaazbwzbw/EasyMark)](https://github.com/aaaazbwzbw/EasyMark/releases/latest)
 [![Total Downloads](https://img.shields.io/github/downloads/aaaazbwzbw/EasyMark/total)](https://github.com/aaaazbwzbw/EasyMark/releases)
 
-[English](README.md) | [简体中文](README_zh-CN.md)
+[简体中文](README.md) | [English](README_en-US.md)
 
-⭐ **Your stars motivate me to keep improving!** ⭐
+⭐ **大家的 Star 就是我更新的动力！** ⭐
 
 ---
 
-## Download
+## 下载
 
-Get the latest version of EasyMark from the releases page:
+从发布页面获取 EasyMark 的最新版本：
 
-<a href="https://github.com/aaaazbwzbw/EasyMark/releases/latest"><img src="https://img.shields.io/badge/Download_Latest_Version-4FC08D?style=for-the-badge&logo=windows" alt="Download Latest Version"></a>
+<a href="https://github.com/aaaazbwzbw/EasyMark/releases/latest"><img src="https://img.shields.io/badge/下载最新版本-4FC08D?style=for-the-badge&logo=windows" alt="下载最新版本"></a>
 
 
 </div>
 
 ---
 
-## Overview
+## 项目简介
 
-EasyMark is a modern, high-performance annotation tool designed for computer vision tasks. It supports multiple annotation types with AI-assisted labeling, comprehensive dataset management, and integrated model training capabilities.
+EasyMark 是一款现代化、高性能的计算机视觉标注工具，面向检测/分割/关键点等任务，提供从数据集导入、标注、版本管理、导出到训练、推理的一体化工作流。
+
+它采用 **Electron + Vue 3 + Go** 架构：
+
+- **前端（Vue 3）**：负责 UI 与交互
+- **后端（Go）**：负责文件读写、数据集导入导出、任务编排（大数据集性能更稳定）
+- **插件系统**：推理/训练/格式转换均可插件化扩展
 
 <div align="center">
 
@@ -43,97 +49,107 @@ EasyMark is a modern, high-performance annotation tool designed for computer vis
 
 </div>
 
-## Features
+## 功能特性
 
-### Annotation
+### 标注类型
 
-| Type | Use Case | Operation |
+| 类型 | 应用场景 | 操作方式 |
 |------|----------|-----------|
-| **Bounding Box** | Object Detection | Click & Drag |
-| **Polygon** | Instance/Semantic Segmentation | Alt + Click |
-| **Keypoints** | Pose Estimation | Alt + Click (with skeleton binding) |
+| **矩形框** | 目标检测 | 鼠标拖拽 |
+| **多边形** | 实例分割 / 语义分割 | Alt + 点击 |
+| **关键点** | 姿态估计 | Alt + 点击（需绑定骨架） |
 
-### AI-Assisted Annotation
+### AI 辅助标注
 
-Boost your labeling efficiency with built-in AI plugins:
+内置 AI 插件，大幅提升标注效率：
 
-- **SAM2** - Segment Anything Model for interactive segmentation
-- **YOLO** - Automatic object detection on image switch
+- **SAM2** - 交互式分割（提示点点击即分割）
+- **YOLO** - 切换图片自动检测
 
-### Dataset Management
+SAM2 交互补充：
 
-- **Format Support**: YOLO, VOC, COCO import/export
-- **Version Control**: Snapshot, rollback, and manage dataset versions
-- **Flexible Export**: Cross-project merging with custom train/val/test splits
+- **Shift + 左键**：正向提示点
+- **Shift + 右键**：负向提示点（排除区域）
+- **Ctrl + Shift + 左键/右键**：连续追加提示点，基于当前分割结果持续细化
+- **基于SAM2分割结果的后处理**: 可通过简单的点选实现矩形框的快速标注
 
-### Model Training
+### 数据集管理
 
-- Built-in **Ultralytics YOLO** training pipeline
-- Automatic model deployment to inference plugins
-- Training history with metrics visualization
+- **格式支持**：YOLO、VOC、COCO 导入导出
+- **版本控制**：快照、回溯、多版本管理
+- **灵活导出**：跨项目合并，自定义训练集/验证集/测试集划分
 
-### Plugin System
+### 模型训练
 
-Extend EasyMark with custom plugins for:
-- Dataset import/export formats
-- Training frameworks
-- Inference backends
+- 内置 **Ultralytics YOLO** 训练流程
+- 训练完成自动部署到推理插件
+- 训练历史与指标可视化
 
-## Tech Stack
+### 插件系统
 
-| Component | Technology |
+可通过插件扩展以下能力：
+
+- 数据集导入导出格式
+- 训练框架
+- 推理后端
+
+你可以在应用内“插件”页面管理插件，也可以按文档自行开发插件。
+
+## 技术栈
+
+| 模块 | 技术 |
 |-----------|------------|
-| Frontend | Vue 3 + TypeScript + Vite + TailwindCSS |
-| Desktop | Electron 28 |
-| Backend | Go 1.21+ |
-| Plugins | Python 3.10+ |
+| 前端 | Vue 3 + TypeScript + Vite + TailwindCSS |
+| 桌面端 | Electron |
+| 后端 | Go 1.21+ |
+| 插件 | Python 3.10+ |
 
-## Quick Start
+## 快速开始
 
-### Prerequisites
+### 环境要求
 
 - **Node.js** 18+
 - **Go** 1.21+
-- **Python** 3.10+ (for AI plugins)
+- **Python** 3.10+（AI 插件需要）
 
-### Installation
+### 安装
 
 ```bash
-# Clone the repository
+# 克隆仓库
 git clone https://github.com/aaaazbwzbw/EasyMark.git
 cd easymark
 
-# Install frontend dependencies
+# 安装前端依赖
 cd frontend && npm install
 
-# Install Electron dependencies
+# 安装 Electron 依赖
 cd ../host-electron && npm install
 
-# Build backend
+# 编译后端
 cd ../backend-go && go build
 ```
 
-### Development
+### 开发调试
 
 ```bash
-# Terminal 1: Start backend
+# 终端 1：启动后端
 cd backend-go && ./backend-go
 
-# Terminal 2: Start frontend dev server
+# 终端 2：启动前端开发服务器
 cd frontend && npm run dev
 
-# Terminal 3: Start Electron
+# 终端 3：启动 Electron
 cd host-electron && npm run dev
 ```
 
-### Build
+### 打包构建
 
 ```bash
-# Build for production
+# 生产环境打包
 cd host-electron && npm run build
 ```
 
-## Project Structure
+## 项目结构
 
 ```
 easymark/
@@ -148,40 +164,38 @@ easymark/
 └── docs/                  # Development documentation
 ```
 
-## Documentation
+## 文档
 
-- **User Guide**: Available in the app's Help page
-- **Plugin Development**: See `docs/plugin-development-guide.md`
-- **API Reference**: See `docs/plugin-api-reference.md`
+- **使用指南**：应用内帮助页面
+- **插件开发**：参见 `docs/plugin-development-guide.md`
+- **API 参考**：参见 `docs/plugin-api-reference.md`
 
-## Contributing
+## 参与贡献
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+欢迎贡献代码！请参阅 [贡献指南](CONTRIBUTING_zh-CN.md) 了解详情。
 
-> 中文版：[贡献指南](CONTRIBUTING_zh-CN.md)
+1. Fork 本仓库
+2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'Add amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 发起 Pull Request
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+## 开发路线
 
-## Roadmap
+- [x] 视频标注
+- [ ] 插件市场
+- [ ] 云端同步
+- [ ] 团队协作
+- [ ] 更多 AI 模型支持
 
-- [ ] Plugin Marketplace
-- [ ] Cloud Sync
-- [ ] Team Collaboration
-- [ ] More AI Models Support
-- [ ] Video Annotation
+## 开源协议
 
-## License
+本项目采用 MIT 协议开源 - 详见 [LICENSE](LICENSE) 文件。
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 致谢
 
-## Acknowledgments
-
-- [Ultralytics](https://github.com/ultralytics/ultralytics) for YOLO
-- [Segment Anything](https://github.com/facebookresearch/segment-anything-2) for SAM2
+- [Ultralytics](https://github.com/ultralytics/ultralytics) - YOLO
+- [Segment Anything](https://github.com/facebookresearch/segment-anything-2) - SAM2
 - [Electron](https://www.electronjs.org/)
 - [Vue.js](https://vuejs.org/)
 
@@ -189,6 +203,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 <div align="center">
 
-**If you find EasyMark useful, please consider giving it a star!**
+**如果觉得 EasyMark 对你有帮助，欢迎给个 Star！**
 
 </div>

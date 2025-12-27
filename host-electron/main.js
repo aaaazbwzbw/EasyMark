@@ -661,6 +661,32 @@ function getInferPythonExe() {
 // 当前激活的推理插件 ID
 let activeInferPluginId = null
 
+function getPluginVenvBindingsPath() {
+  const dataPath = getDataPath()
+  return path.join(dataPath, 'python_plugin_venv_bindings.json')
+}
+
+function loadPluginVenvBindings() {
+  const bindingsPath = getPluginVenvBindingsPath()
+  try {
+    if (!fs.existsSync(bindingsPath)) return {}
+    const raw = fs.readFileSync(bindingsPath, 'utf-8')
+    const data = JSON.parse(raw)
+    const bindings = data && typeof data === 'object' ? data.bindings : null
+    if (bindings && typeof bindings === 'object') return bindings
+  } catch (e) {
+    console.warn('[Infer] Failed to load venv bindings:', e.message)
+  }
+  return {}
+}
+
+function getPythonExeFromVenvDir(venvDir) {
+  if (process.platform === 'win32') {
+    return path.join(venvDir, 'Scripts', 'python.exe')
+  }
+  return path.join(venvDir, 'bin', 'python')
+}
+
 // 查找推理插件脚本路径
 function findInferPluginScript(pluginId) {
   const dataPath = getDataPath()
@@ -751,6 +777,7 @@ function startInferProcess(pluginId) {
   // 获取 Python 解释器
   // 优先级：useVenvFrom 指定的 > 自己 ID 对应的 > 全局虚拟环境
   let pythonExe
+  const venvBindings = loadPluginVenvBindings()
   const manifest = pluginInfo?.manifest
   const useVenvFrom = manifest?.python?.useVenvFrom
   const pluginHasPython = !!manifest?.python
@@ -768,7 +795,20 @@ function startInferProcess(pluginId) {
   }
   
   if (venvPluginId) {
-    pythonExe = path.join(dataPath, 'plugins_python_venv', venvPluginId, 'Scripts', 'python.exe')
+    const boundVenvDir = venvBindings?.[venvPluginId]
+    if (boundVenvDir && typeof boundVenvDir === 'string' && boundVenvDir.trim()) {
+      const boundPython = getPythonExeFromVenvDir(boundVenvDir)
+      if (fs.existsSync(boundPython)) {
+        pythonExe = boundPython
+        console.log('[Infer] Using external venv binding:', boundVenvDir)
+      } else {
+        console.warn('[Infer] External venv bound but python not found:', boundPython)
+      }
+    }
+
+    if (!pythonExe) {
+      pythonExe = path.join(dataPath, 'plugins_python_venv', venvPluginId, 'Scripts', 'python.exe')
+    }
   } else {
     // 回退到全局虚拟环境
     pythonExe = path.join(dataPath, 'EasyMark_python_venv', 'Scripts', 'python.exe')
@@ -1057,9 +1097,6 @@ ipcMain.handle('install-plugin', async (_event, filePath) => {
       const destDir = path.join(pluginsDir, manifest.id)
       
       // 如果已存在，先删除
-      if (fs.existsSync(destDir)) {
-        fs.rmSync(destDir, { recursive: true, force: true })
-      }
       
       // 复制目录
       const copyDir = (src, dest) => {

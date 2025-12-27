@@ -69,7 +69,7 @@
                     type="checkbox" 
                     class="tree-node__checkbox"
                     :checked="isCategorySelected(project.id, version.version, cat.id)"
-                    @change="toggleCategorySelection(project.id, version.version, cat)"
+                    @change="toggleCategorySelection(project.id, version.version, cat, $event)"
                   />
                   <component :is="getCategoryIcon(cat.type)" :size="14" class="tree-node__icon" :style="{ color: cat.color }" />
                   <span class="tree-node__label">{{ cat.name }}</span>
@@ -591,12 +591,17 @@ function isCategorySelected(projectId: string, version: number, categoryId: numb
   return selectedCategories.value.some(c => c.projectId === projectId && c.version === version && c.categoryId === categoryId)
 }
 
-function toggleCategorySelection(projectId: string, version: number, category: Category) {
+function toggleCategorySelection(projectId: string, version: number, category: Category, e?: Event) {
   const idx = selectedCategories.value.findIndex(c => c.projectId === projectId && c.version === version && c.categoryId === category.id)
   if (idx >= 0) { selectedCategories.value.splice(idx, 1) }
   else {
     const conflict = selectedCategories.value.find(c => c.projectId === projectId && c.categoryName === category.name && c.version !== version)
-    if (conflict) { notifyError(t('dataset.export.conflictWarning')); return }
+    if (conflict) {
+      notifyError(t('dataset.export.conflictWarning'))
+      const target = (e?.target as HTMLInputElement | undefined)
+      if (target) target.checked = false
+      return
+    }
     selectedCategories.value.push({ projectId, version, categoryId: category.id, categoryName: category.name })
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "easymark",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "EasyMark - 计算机视觉标注工具",
   "repository": {
     "type": "git",
@@ -11,8 +11,9 @@
     "start": "electron .",
     "build:vue": "cd ../frontend && npm run build",
     "build:go": "cd ../backend-go && go build -ldflags \"-s -w\" -o easymark-backend.exe .",
+    "build:dataset-common": "cd ../host-plugins/dataset-common && go build -ldflags \"-s -w\" -o common-importer.exe .",
     "build:electron": "electron-builder --win --x64",
-    "build": "npm run build:vue && npm run build:go && npm run build:electron"
+    "build": "npm run build:vue && npm run build:go && npm run build:dataset-common && npm run build:electron"
   },
   "keywords": ["annotation", "labeling", "computer-vision"],
   "author": "EasyMark",

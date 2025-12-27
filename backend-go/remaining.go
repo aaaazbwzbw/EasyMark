@@ -930,67 +930,22 @@ func handlePluginInstall(w http.ResponseWriter, r *http.Request) {
 	destDir := filepath.Join(pluginsDir, manifest.ID)
 
 	// 如果已存在，保留模型文件后再删除其他文件
-	var modelFiles []string
 	if _, err := os.Stat(destDir); err == nil {
-		// 扫描现有的模型文件
-		modelExts := map[string]bool{".pt": true, ".pth": true, ".onnx": true, ".safetensors": true, ".bin": true}
-		filepath.WalkDir(destDir, func(path string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
-				return nil
-			}
-			ext := strings.ToLower(filepath.Ext(d.Name()))
-			if modelExts[ext] {
-				relPath, _ := filepath.Rel(destDir, path)
-				modelFiles = append(modelFiles, relPath)
-			}
-			return nil
-		})
-
-		if len(modelFiles) > 0 {
-			log.Printf("[Plugin Install] Found %d model files to preserve: %v", len(modelFiles), modelFiles)
-			// 创建临时目录保存模型文件
-			modelTempDir, err := os.MkdirTemp("", "plugin-models-*")
-			if err == nil {
-				defer os.RemoveAll(modelTempDir)
-				// 移动模型文件到临时目录
-				for _, relPath := range modelFiles {
-					srcPath := filepath.Join(destDir, relPath)
-					dstPath := filepath.Join(modelTempDir, relPath)
-					os.MkdirAll(filepath.Dir(dstPath), 0755)
-					os.Rename(srcPath, dstPath)
-				}
-				// 删除旧插件目录
-				os.RemoveAll(destDir)
-				// 安装新插件
-				if err := os.Rename(pluginRoot, destDir); err != nil {
-					if err := copyDir(pluginRoot, destDir); err != nil {
-						log.Printf("copy plugin error: %v", err)
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusInternalServerError)
-						_, _ = w.Write([]byte(`{"error":"install_failed"}`))
-						return
-					}
-				}
-				// 恢复模型文件
-				for _, relPath := range modelFiles {
-					srcPath := filepath.Join(modelTempDir, relPath)
-					dstPath := filepath.Join(destDir, relPath)
-					os.MkdirAll(filepath.Dir(dstPath), 0755)
-					os.Rename(srcPath, dstPath)
-				}
-				log.Printf("[Plugin Install] Restored %d model files", len(modelFiles))
-
-				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"success":         true,
-					"plugin":          manifest,
-					"modelsPreserved": len(modelFiles),
-				})
-				return
-			}
+		if err := copyDir(pluginRoot, destDir); err != nil {
+			log.Printf("copy plugin error: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"error":"install_failed"}`))
+			return
 		}
-		// 无模型文件或临时目录创建失败，直接删除
-		os.RemoveAll(destDir)
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"plugin":  manifest,
+			"updated": true,
+		})
+		return
 	}
 
 	if err := os.Rename(pluginRoot, destDir); err != nil {
@@ -5911,11 +5866,17 @@ func handleStartTraining(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 检查插件虚拟环境是否存在（优先使用插件虚拟环境，不存在则检查全局虚拟环境）
-	dataPath := getDataPath()
-	pluginVenvPath := filepath.Join(dataPath, "plugins_python_venv", req.PluginID)
-	pluginPython := filepath.Join(pluginVenvPath, "Scripts", "python.exe")
-	if _, err := os.Stat(pluginPython); os.IsNotExist(err) {
-		// 插件虚拟环境不存在，检查全局虚拟环境
+	_, _, venvType, hasVenv := resolvePluginVenv(req.PluginID)
+	if !hasVenv {
+		// 若绑定了外部 venv 但不可用，则直接报错（避免悄悄回退导致用户困惑）
+		if venvType == "external" {
+			log.Printf("[Training] External venv bound but not found for plugin %s", req.PluginID)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "python_not_deployed"})
+			return
+		}
+		// 未绑定外部 venv，则允许回退到全局虚拟环境
 		if !isPythonVenvDeployed() {
 			log.Printf("[Training] No Python environment found for plugin %s", req.PluginID)
 			w.Header().Set("Content-Type", "application/json")
@@ -6006,18 +5967,17 @@ func startTrainingTask(taskID, taskName, pluginID, pluginPath, entryName string,
 	entryPath := filepath.Join(pluginPath, entryName)
 	var cmd *exec.Cmd
 
-	// 获取插件虚拟环境路径
-	dataPath := getDataPath()
-	pluginVenvPath := filepath.Join(dataPath, "plugins_python_venv", pluginID)
-	pluginPython := filepath.Join(pluginVenvPath, "Scripts", "python.exe")
-
-	// 检查插件虚拟环境是否存在，不存在则回退到全局虚拟环境
-	if _, err := os.Stat(pluginPython); os.IsNotExist(err) {
+	// 获取插件虚拟环境路径（优先外部绑定/本地插件 venv；不可用时回退全局 venv）
+	pluginVenvPath, pluginPython, venvType, hasVenv := resolvePluginVenv(pluginID)
+	if !hasVenv {
+		if venvType == "external" {
+			return fmt.Errorf("python_not_deployed")
+		}
 		pluginVenvPath = getPythonVenvPath()
 		pluginPython = filepath.Join(pluginVenvPath, "Scripts", "python.exe")
 		log.Printf("[Training] Plugin venv not found, using global venv: %s", pluginVenvPath)
 	} else {
-		log.Printf("[Training] Using plugin venv: %s", pluginVenvPath)
+		log.Printf("[Training] Using plugin venv (%s): %s", venvType, pluginVenvPath)
 	}
 
 	if strings.HasSuffix(entryName, ".exe") {
@@ -7032,6 +6992,88 @@ type PythonEnvSettings struct {
 var pythonEnvSettings = PythonEnvSettings{}
 var pythonEnvSettingsMu sync.Mutex
 
+var pluginVenvBindingsMu sync.Mutex
+var pluginVenvBindingsLoaded bool
+var pluginVenvBindings = map[string]string{}
+
+type pluginVenvBindingsFile struct {
+	Bindings map[string]string `json:"bindings"`
+}
+
+func getPluginVenvBindingsPath(cfg *PathsConfig) string {
+	return filepath.Join(cfg.DataPath, "python_plugin_venv_bindings.json")
+}
+
+func ensurePluginVenvBindingsLoaded(cfg *PathsConfig) {
+	pluginVenvBindingsMu.Lock()
+	defer pluginVenvBindingsMu.Unlock()
+	if pluginVenvBindingsLoaded {
+		return
+	}
+	pluginVenvBindingsLoaded = true
+
+	path := getPluginVenvBindingsPath(cfg)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		pluginVenvBindings = map[string]string{}
+		return
+	}
+	var f pluginVenvBindingsFile
+	if err := json.Unmarshal(data, &f); err != nil {
+		pluginVenvBindings = map[string]string{}
+		return
+	}
+	if f.Bindings == nil {
+		pluginVenvBindings = map[string]string{}
+		return
+	}
+	pluginVenvBindings = f.Bindings
+}
+
+func savePluginVenvBindings(cfg *PathsConfig) error {
+	pluginVenvBindingsMu.Lock()
+	defer pluginVenvBindingsMu.Unlock()
+	data, err := json.MarshalIndent(pluginVenvBindingsFile{Bindings: pluginVenvBindings}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(getPluginVenvBindingsPath(cfg), data, 0644)
+}
+
+func getPythonExeFromVenvDir(venvDir string) string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(venvDir, "Scripts", "python.exe")
+	}
+	return filepath.Join(venvDir, "bin", "python")
+}
+
+func resolvePluginVenv(pluginId string) (venvDir string, pythonExe string, venvType string, hasPython bool) {
+	cfg, err := loadPathsConfig()
+	if err != nil {
+		return "", "", "none", false
+	}
+	ensurePluginVenvBindingsLoaded(cfg)
+
+	pluginVenvBindingsMu.Lock()
+	boundVenvDir, hasBinding := pluginVenvBindings[pluginId]
+	pluginVenvBindingsMu.Unlock()
+
+	if hasBinding && strings.TrimSpace(boundVenvDir) != "" {
+		pythonExe = getPythonExeFromVenvDir(boundVenvDir)
+		if _, err := os.Stat(pythonExe); err == nil {
+			return boundVenvDir, pythonExe, "external", true
+		}
+		return boundVenvDir, pythonExe, "external", false
+	}
+
+	venvDir = filepath.Join(cfg.DataPath, "plugins_python_venv", pluginId)
+	pythonExe = getPythonExeFromVenvDir(venvDir)
+	if _, err := os.Stat(pythonExe); err == nil {
+		return venvDir, pythonExe, "local", true
+	}
+	return venvDir, pythonExe, "none", false
+}
+
 // handlePythonVersion 获取系统 Python 版本
 func handlePythonVersion(w http.ResponseWriter, r *http.Request) {
 	withCORS(w)
@@ -7077,24 +7119,7 @@ func handlePythonEnvStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg, err := loadPathsConfig()
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "config_error"})
-		return
-	}
-
-	// 检查虚拟环境是否存在
-	venvPath := filepath.Join(cfg.DataPath, "plugins_python_venv", pluginId)
-	venvPython := filepath.Join(venvPath, "Scripts", "python.exe")
-	if runtime.GOOS != "windows" {
-		venvPython = filepath.Join(venvPath, "bin", "python")
-	}
-	hasVenv := false
-	if _, err := os.Stat(venvPython); err == nil {
-		hasVenv = true
-	}
+	venvPath, venvPython, venvType, hasVenv := resolvePluginVenv(pluginId)
 
 	// 加载插件清单获取依赖列表（根据插件 ID 查找正确的目录）
 	pluginDir, err := getPluginDirByID(pluginId)
@@ -7102,6 +7127,8 @@ func handlePythonEnvStatus(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"hasVenv":      hasVenv,
+			"venvPath":     venvPath,
+			"venvType":     venvType,
 			"dependencies": []interface{}{},
 		})
 		return
@@ -7112,6 +7139,8 @@ func handlePythonEnvStatus(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"hasVenv":      hasVenv,
+			"venvPath":     venvPath,
+			"venvType":     venvType,
 			"dependencies": []interface{}{},
 		})
 		return
@@ -7122,6 +7151,8 @@ func handlePythonEnvStatus(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"hasVenv":      hasVenv,
+			"venvPath":     venvPath,
+			"venvType":     venvType,
 			"dependencies": []interface{}{},
 		})
 		return
@@ -7221,10 +7252,112 @@ func handlePythonEnvStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"hasVenv":          hasVenv,
+		"venvPath":         venvPath,
+		"venvType":         venvType,
 		"dependencies":     dependencies,
 		"pytorchInstalled": pytorchInstalled,
 		"pytorchType":      pytorchType,
 	})
+}
+
+func handlePythonBindVenv(w http.ResponseWriter, r *http.Request) {
+	withCORS(w)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		PluginId string `json:"pluginId"`
+		VenvPath string `json:"venvPath"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.PluginId) == "" || strings.TrimSpace(req.VenvPath) == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid_request"})
+		return
+	}
+
+	cfg, err := loadPathsConfig()
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "config_error"})
+		return
+	}
+
+	pythonExe := getPythonExeFromVenvDir(req.VenvPath)
+	if _, err := os.Stat(pythonExe); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid_venv_path"})
+		return
+	}
+
+	ensurePluginVenvBindingsLoaded(cfg)
+	pluginVenvBindingsMu.Lock()
+	pluginVenvBindings[req.PluginId] = req.VenvPath
+	pluginVenvBindingsMu.Unlock()
+
+	if err := savePluginVenvBindings(cfg); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "save_failed"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+}
+
+func handlePythonUnbindVenv(w http.ResponseWriter, r *http.Request) {
+	withCORS(w)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		PluginId string `json:"pluginId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.PluginId) == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid_request"})
+		return
+	}
+
+	cfg, err := loadPathsConfig()
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "config_error"})
+		return
+	}
+
+	ensurePluginVenvBindingsLoaded(cfg)
+	pluginVenvBindingsMu.Lock()
+	_, existed := pluginVenvBindings[req.PluginId]
+	delete(pluginVenvBindings, req.PluginId)
+	pluginVenvBindingsMu.Unlock()
+
+	if err := savePluginVenvBindings(cfg); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "save_failed"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": existed})
 }
 
 // handlePythonPluginsDepsSummary 检查是否存在依赖未安装的 Python 插件
@@ -7287,15 +7420,9 @@ func handlePythonPluginsDepsSummary(w http.ResponseWriter, r *http.Request) {
 			actualPluginID = pluginID // 回退到目录名
 		}
 
-		// 检查插件虚拟环境是否存在
-		venvPath := filepath.Join(cfg.DataPath, "plugins_python_venv", actualPluginID)
-		venvPython := filepath.Join(venvPath, "Scripts", "python.exe")
-		if runtime.GOOS != "windows" {
-			venvPython = filepath.Join(venvPath, "bin", "python")
-		}
-		if _, err := os.Stat(venvPython); err != nil {
-			log.Printf("[PluginsDepsSummary] Plugin %s: venv not found at %s", pluginID, venvPython)
-			// 没有虚拟环境也视为"有问题"
+		_, venvPython, venvType, hasVenv := resolvePluginVenv(actualPluginID)
+		if !hasVenv {
+			log.Printf("[PluginsDepsSummary] Plugin %s: venv not found (type=%s)", pluginID, venvType)
 			hasProblem = true
 			break
 		}
@@ -7435,6 +7562,14 @@ func handlePythonCreateVenv(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_, _, venvType, _ := resolvePluginVenv(req.PluginId)
+	if venvType == "external" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "external_venv_bound"})
+		return
+	}
+
 	venvPath := filepath.Join(cfg.DataPath, "plugins_python_venv", req.PluginId)
 	os.MkdirAll(filepath.Dir(venvPath), 0755)
 
@@ -7502,6 +7637,14 @@ func handlePythonDeleteVenv(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_, _, venvType, _ := resolvePluginVenv(req.PluginId)
+	if venvType == "external" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "external_venv_bound"})
+		return
+	}
+
 	venvPath := filepath.Join(cfg.DataPath, "plugins_python_venv", req.PluginId)
 	if err := os.RemoveAll(venvPath); err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -7539,22 +7682,8 @@ func handlePythonInstallDeps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg, err := loadPathsConfig()
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "config_error"})
-		return
-	}
-
-	venvPath := filepath.Join(cfg.DataPath, "plugins_python_venv", req.PluginId)
-	venvPython := filepath.Join(venvPath, "Scripts", "python.exe")
-	if runtime.GOOS != "windows" {
-		venvPython = filepath.Join(venvPath, "bin", "python")
-	}
-
-	// 检查虚拟环境是否存在
-	if _, err := os.Stat(venvPython); os.IsNotExist(err) {
+	_, venvPython, _, hasVenv := resolvePluginVenv(req.PluginId)
+	if !hasVenv {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "venv_not_exists"})
@@ -7810,14 +7939,8 @@ func handlePythonUninstallDep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg, _ := loadPathsConfig()
-	venvPath := filepath.Join(cfg.DataPath, "plugins_python_venv", req.PluginId)
-	venvPython := filepath.Join(venvPath, "Scripts", "python.exe")
-	if runtime.GOOS != "windows" {
-		venvPython = filepath.Join(venvPath, "bin", "python")
-	}
-
-	if _, err := os.Stat(venvPython); os.IsNotExist(err) {
+	_, venvPython, _, hasVenv := resolvePluginVenv(req.PluginId)
+	if !hasVenv {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "venv_not_exists"})
@@ -8080,12 +8203,9 @@ func handlePythonInstallPytorch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 获取虚拟环境路径
 	dataPath := getDataPath()
-	venvDir := filepath.Join(dataPath, "plugins_python_venv", req.PluginID)
-	venvPython := filepath.Join(venvDir, "Scripts", "python.exe")
-
-	if _, err := os.Stat(venvPython); os.IsNotExist(err) {
+	_, venvPython, _, hasVenv := resolvePluginVenv(req.PluginID)
+	if !hasVenv {
 		http.Error(w, "Venv not exists", http.StatusBadRequest)
 		return
 	}
@@ -8267,11 +8387,8 @@ func handlePythonRunCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dataPath := getDataPath()
-	venvDir := filepath.Join(dataPath, "plugins_python_venv", req.PluginID)
-	venvPython := filepath.Join(venvDir, "Scripts", "python.exe")
-
-	if _, err := os.Stat(venvPython); os.IsNotExist(err) {
+	venvDir, venvPython, venvType, hasVenv := resolvePluginVenv(req.PluginID)
+	if !hasVenv {
 		http.Error(w, "Venv not exists", http.StatusBadRequest)
 		return
 	}
@@ -8301,16 +8418,40 @@ func handlePythonRunCommand(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
-		activateScript := filepath.Join(venvDir, "Scripts", "activate.bat")
-		fullCmd := fmt.Sprintf("cmd /C \"%s && %s\"", activateScript, req.Command)
+		// For external venvs, do not assume activate.bat exists or is in a standard location.
+		// We adjust PATH and VIRTUAL_ENV so that `pip`/`python` resolve to this venv.
+		venvBin := filepath.Join(venvDir, "Scripts")
+		if runtime.GOOS != "windows" {
+			venvBin = filepath.Join(venvDir, "bin")
+		}
+		fullCmd := fmt.Sprintf("cmd /C \"set VIRTUAL_ENV=%s && set PATH=%s;%%PATH%% && %s\"", venvDir, venvBin, req.Command)
+		if runtime.GOOS != "windows" {
+			// Basic fallback for non-windows: run via sh with PATH adjusted
+			fullCmd = fmt.Sprintf("sh -lc 'export VIRTUAL_ENV=%s; export PATH=%s:$PATH; %s'", venvDir, venvBin, req.Command)
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 
 		cpty, err := conpty.Start(fullCmd, conpty.ConPtyDimensions(120, 30))
 		if err != nil {
-			sendOutput(fmt.Sprintf("Error: %v\n", err))
-			sendDone(false)
+			// Fallback to normal exec when ConPTY is not available
+			var cmd *exec.Cmd
+			if runtime.GOOS == "windows" {
+				cmd = exec.Command("cmd", "/C", req.Command)
+				cmd.Env = append(os.Environ(), "VIRTUAL_ENV="+venvDir, "PATH="+venvBin+";"+os.Getenv("PATH"))
+			} else {
+				cmd = exec.Command("sh", "-lc", req.Command)
+				cmd.Env = append(os.Environ(), "VIRTUAL_ENV="+venvDir, "PATH="+venvBin+":"+os.Getenv("PATH"))
+			}
+			out, err := cmd.CombinedOutput()
+			if len(out) > 0 {
+				sendOutput(string(out))
+			}
+			sendOutput("\n[Done]\n")
+			sendDone(err == nil)
+			_ = venvPython
+			_ = venvType
 			return
 		}
 		defer cpty.Close()

@@ -69,16 +69,32 @@ type ProjectSummary = {
   imageCount?: number
 }
 
+let pythonPluginDepsCheckInFlight = false
+let pythonPluginDepsLastCheckedAt = 0
+
 // 检查是否存在依赖未安装的 Python 插件
 const checkPythonPluginDepsIssue = async () => {
+	if (pythonPluginDepsCheckInFlight) return
+	const now = Date.now()
+	if (pythonPluginDepsLastCheckedAt && now - pythonPluginDepsLastCheckedAt < 10_000) return
+	pythonPluginDepsCheckInFlight = true
 	try {
 		const res = await fetch('http://127.0.0.1:18080/api/python/plugins-deps-summary')
 		if (!res.ok) return
 		const data = await res.json()
 		hasPythonPluginDepsIssue.value = !!data.hasProblem
+		try {
+			localStorage.setItem('easymark_python_plugin_deps_issue_v1', hasPythonPluginDepsIssue.value ? '1' : '0')
+		} catch {}
 	} catch {
 		// 网络 / 后端异常时，不打角标，避免干扰正常使用
 		hasPythonPluginDepsIssue.value = false
+		try {
+			localStorage.setItem('easymark_python_plugin_deps_issue_v1', '0')
+		} catch {}
+	} finally {
+		pythonPluginDepsLastCheckedAt = Date.now()
+		pythonPluginDepsCheckInFlight = false
 	}
 }
 
@@ -108,6 +124,14 @@ const currentProject = ref<ProjectSummary | null>(null)
 
 // 是否存在依赖未安装的 Python 插件（用于在侧边栏 Python 按钮上显示橙色角标）
 const hasPythonPluginDepsIssue = ref(false)
+
+try {
+	const v = localStorage.getItem('easymark_python_plugin_deps_issue_v1')
+	if (v !== null) hasPythonPluginDepsIssue.value = v === '1'
+} catch {}
+
+let pythonEnvBadgeRouteGuardRegistered = false
+let removePythonEnvBadgeRouteGuard: (() => void) | null = null
 
 type ProjectImageListItem = {
   id: number
@@ -2211,6 +2235,17 @@ const hasNewVersion = ref(false)
 const latestVersion = ref('')
 const currentVersion = ref('')
 
+try {
+	const storedHasNew = localStorage.getItem('easymark_has_new_version_v1')
+	if (storedHasNew !== null) hasNewVersion.value = storedHasNew === '1'
+	const storedLatest = localStorage.getItem('easymark_latest_version_v1')
+	if (storedLatest) latestVersion.value = storedLatest
+	const storedCurrent = localStorage.getItem('easymark_current_version_v1')
+	if (storedCurrent) currentVersion.value = storedCurrent
+} catch {}
+
+let updateCheckIntervalId: ReturnType<typeof setInterval> | null = null
+
 const checkForUpdates = async () => {
   try {
     // 获取本地版本
@@ -2237,11 +2272,29 @@ const checkForUpdates = async () => {
     for (let i = 0; i < 3; i++) {
       if ((remote[i] || 0) > (local[i] || 0)) {
         hasNewVersion.value = true
+		try {
+			localStorage.setItem('easymark_has_new_version_v1', '1')
+			localStorage.setItem('easymark_latest_version_v1', latestVersion.value)
+			localStorage.setItem('easymark_current_version_v1', currentVersion.value)
+		} catch {}
         return
       } else if ((remote[i] || 0) < (local[i] || 0)) {
+		hasNewVersion.value = false
+		try {
+			localStorage.setItem('easymark_has_new_version_v1', '0')
+			localStorage.setItem('easymark_latest_version_v1', latestVersion.value)
+			localStorage.setItem('easymark_current_version_v1', currentVersion.value)
+		} catch {}
         return
       }
     }
+
+	hasNewVersion.value = false
+	try {
+		localStorage.setItem('easymark_has_new_version_v1', '0')
+		localStorage.setItem('easymark_latest_version_v1', latestVersion.value)
+		localStorage.setItem('easymark_current_version_v1', currentVersion.value)
+	} catch {}
   } catch (e) {
     console.log('[Version] Check failed:', e)
   }
@@ -2414,13 +2467,15 @@ const runPromptInference = async (points: Array<{x: number; y: number; type: 'po
   
   isInferring.value = true
   try {
+    const plainPoints = points.map(p => ({ x: Number(p.x), y: Number(p.y), type: p.type }))
+
     const t0 = performance.now()
     const result = await window.electronAPI?.inferenceRun?.({
       projectId: currentProject.value.id,
       path: activeImage.value.originalPath || '',
       conf: inferenceConf.value,
       iou: inferenceIou.value,
-      points,
+      points: plainPoints,
       multimask: false,
       outputType
     } as any)
@@ -2495,7 +2550,9 @@ const runPromptInference = async (points: Array<{x: number; y: number; type: 'po
 }
 
 // SAM-2 提示点点击处理
-const handlePromptClick = (payload: { x: number; y: number; type: 'positive' | 'negative' }) => {
+const promptPointsByImageId = ref<Record<number, Array<{x: number; y: number; type: 'positive' | 'negative'}>>>({})
+
+const handlePromptClick = (payload: { x: number; y: number; type: 'positive' | 'negative'; append?: boolean }) => {
   // 检查是否选中了多边形或矩形框类别
   if (!selectedCategory.value || (selectedCategory.value.type !== 'polygon' && selectedCategory.value.type !== 'bbox')) {
     notifyWarning(t('inference.selectPolygonCategory'))
@@ -2503,8 +2560,18 @@ const handlePromptClick = (payload: { x: number; y: number; type: 'positive' | '
   }
   
   console.log('[App] Prompt click:', payload, 'category:', selectedCategory.value.name, 'type:', selectedCategory.value.type)
-  // 直接使用单个点进行推理（可以扩展为累积多个点）
-  runPromptInference([payload])
+
+  if (!activeImage.value) return
+  const imageId = activeImage.value.id
+  const existing = promptPointsByImageId.value[imageId] || []
+  const existingPlain = existing.map(p => ({ x: Number(p.x), y: Number(p.y), type: p.type }))
+
+  const nextPoints = payload.append
+    ? [...existingPlain, { x: Number(payload.x), y: Number(payload.y), type: payload.type }]
+    : [{ x: Number(payload.x), y: Number(payload.y), type: payload.type }]
+  promptPointsByImageId.value = { ...promptPointsByImageId.value, [imageId]: nextPoints }
+
+  runPromptInference(nextPoints)
 }
 
 // YOLOE 等 box 模式推理：用户框选的 bbox 作为 visual prompt
@@ -2673,6 +2740,23 @@ onMounted(() => {
   
   // 检查是否有新版本
   checkForUpdates()
+
+  if (!pythonEnvBadgeRouteGuardRegistered) {
+    pythonEnvBadgeRouteGuardRegistered = true
+    removePythonEnvBadgeRouteGuard = router.afterEach((to, from) => {
+      const toPythonEnv = to.path === '/python-env'
+      const fromPythonEnv = from.path === '/python-env'
+      if (toPythonEnv || fromPythonEnv) {
+        void checkPythonPluginDepsIssue()
+      }
+    })
+  }
+
+  if (!updateCheckIntervalId) {
+    updateCheckIntervalId = setInterval(() => {
+      void checkForUpdates()
+    }, 60 * 60 * 1000)
+  }
   
   // 只注册一次 Electron IPC 监听器，防止组件重建时重复注册
   if (!electronListenersRegistered) {
@@ -2881,6 +2965,18 @@ onMounted(() => {
     window.removeEventListener('mousedown', handleGlobalMousedown, true)
     window.removeEventListener('keydown', handleGlobalKeydown, true)
   })
+})
+
+onBeforeUnmount(() => {
+  if (updateCheckIntervalId) {
+    clearInterval(updateCheckIntervalId)
+    updateCheckIntervalId = null
+  }
+  if (removePythonEnvBadgeRouteGuard) {
+    removePythonEnvBadgeRouteGuard()
+    removePythonEnvBadgeRouteGuard = null
+    pythonEnvBadgeRouteGuardRegistered = false
+  }
 })
 
 // 记住上次打开的项目ID（使用 sessionStorage 防止组件重建时丢失）

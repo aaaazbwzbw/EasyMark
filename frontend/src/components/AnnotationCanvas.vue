@@ -91,7 +91,7 @@ const emit = defineEmits<{
   (e: 'next'): void
   (e: 'notify', payload: { type: 'info' | 'warning' | 'error'; message: string }): void
   (e: 'annotationComplete'): void  // 用户完成标注操作（创建/调整/删除）
-  (e: 'promptClick', payload: { x: number; y: number; type: 'positive' | 'negative' }): void  // SAM-2 提示点击
+  (e: 'promptClick', payload: { x: number; y: number; type: 'positive' | 'negative'; append?: boolean }): void  // SAM-2 提示点击
 }>()
 
 const { t } = useI18n()
@@ -120,6 +120,7 @@ const isPanning = ref(false)
 const panLastPoint = ref<{ x: number; y: number } | null>(null)
 const isAltPressed = ref(false)
 const isShiftPressed = ref(false)  // Shift+点击用于 SAM-2 提示
+const isCtrlPressed = ref(false)
 
 // 绘制状态
 type DrawingMode = 'none' | 'bbox' | 'keypoint' | 'polygon'
@@ -763,7 +764,7 @@ const handleMouseDown = (e: MouseEvent) => {
   // ★ Shift+点击发送 SAM-2 提示点（左键正向，右键负向）
   if (isShiftPressed.value) {
     const normalized = canvasToNormalized(p.x, p.y)
-    emit('promptClick', { x: normalized.x, y: normalized.y, type: 'positive' })
+    emit('promptClick', { x: normalized.x, y: normalized.y, type: 'positive', append: isCtrlPressed.value })
     return
   }
   
@@ -964,6 +965,7 @@ const handleKeyDown = (e: KeyboardEvent) => {
   if (e.code === 'Space' && !e.repeat) { e.preventDefault(); isSpacePressed.value = true }
   if (e.code === 'AltLeft' || e.code === 'AltRight') { e.preventDefault(); isAltPressed.value = true }
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { isShiftPressed.value = true }
+  if (e.code === 'ControlLeft' || e.code === 'ControlRight') { isCtrlPressed.value = true }
   if (e.code === 'Escape') cancelCurrentDrawing()
   if (e.code === 'Delete' && selectedAnnotationId.value) deleteAnnotation(selectedAnnotationId.value)
   // V 键切换关键点可见性已移至全局快捷键系统
@@ -973,9 +975,10 @@ const handleKeyUp = (e: KeyboardEvent) => {
   if (e.code === 'Space') { isSpacePressed.value = false; if (isPanning.value) { isPanning.value = false; panLastPoint.value = null } }
   if (e.code === 'AltLeft' || e.code === 'AltRight') isAltPressed.value = false
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') isShiftPressed.value = false
+  if (e.code === 'ControlLeft' || e.code === 'ControlRight') isCtrlPressed.value = false
 }
 
-const handleBlur = () => { isSpacePressed.value = false; isAltPressed.value = false; isShiftPressed.value = false; isPanning.value = false; panLastPoint.value = null }
+const handleBlur = () => { isSpacePressed.value = false; isAltPressed.value = false; isShiftPressed.value = false; isCtrlPressed.value = false; isPanning.value = false; panLastPoint.value = null }
 
 const handleContextMenuEvent = (e: MouseEvent) => {
   e.preventDefault()
@@ -984,7 +987,7 @@ const handleContextMenuEvent = (e: MouseEvent) => {
   // ★ Shift+右键发送 SAM-2 负向提示点
   if (isShiftPressed.value) {
     const normalized = canvasToNormalized(p.x, p.y)
-    emit('promptClick', { x: normalized.x, y: normalized.y, type: 'negative' })
+    emit('promptClick', { x: normalized.x, y: normalized.y, type: 'negative', append: isCtrlPressed.value })
     return
   }
   

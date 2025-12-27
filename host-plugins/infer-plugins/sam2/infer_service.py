@@ -288,7 +288,7 @@ def _nms_annotations(annotations: list, iou_threshold: float = 0.5) -> list:
     return keep
 
 
-def _mask_to_annotation(mask: np.ndarray, score: float, img_w: int, img_h: int, output_type: str = "polygon", max_points: int = 64) -> dict:
+def _mask_to_annotation(mask: np.ndarray, score: float, img_w: int, img_h: int, output_type: str = "polygon", max_points: int = 256) -> dict:
     """将掩码转换为标注对象
     
     Args:
@@ -299,7 +299,23 @@ def _mask_to_annotation(mask: np.ndarray, score: float, img_w: int, img_h: int, 
         output_type: 输出类型 "polygon" 或 "rect"
         max_points: 多边形最大顶点数，超过会自动简化
     """
-    mask_uint8 = (mask > 0).astype(np.uint8) * 255
+    if mask is None or mask.size == 0:
+        return None
+
+    is_prob_mask = (mask.dtype != np.uint8) and (float(np.max(mask)) <= 1.0)
+
+    if is_prob_mask:
+        mask_prob = mask.astype(np.float32)
+        if mask_prob.shape[0] >= 3 and mask_prob.shape[1] >= 3:
+            mask_prob = cv2.GaussianBlur(mask_prob, (3, 3), 0)
+        mask_uint8 = (mask_prob >= 0.4).astype(np.uint8) * 255
+    else:
+        mask_uint8 = (mask > 0).astype(np.uint8) * 255
+
+    if mask_uint8.shape[0] >= 3 and mask_uint8.shape[1] >= 3:
+        kernel = np.ones((3, 3), np.uint8)
+        mask_uint8 = cv2.morphologyEx(mask_uint8, cv2.MORPH_CLOSE, kernel, iterations=1)
+
     contours, _ = cv2.findContours(mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
     if not contours:
@@ -310,7 +326,7 @@ def _mask_to_annotation(mask: np.ndarray, score: float, img_w: int, img_h: int, 
     # 使用 approxPolyDP 简化多边形
     # 初始 epsilon 基于轮廓周长
     perimeter = cv2.arcLength(contour, True)
-    epsilon = 0.002 * perimeter  # 初始精度
+    epsilon = 0.001 * perimeter  # 初始精度
     
     # 逐步增加 epsilon 直到顶点数 <= max_points
     approx = cv2.approxPolyDP(contour, epsilon, True)

@@ -124,6 +124,16 @@
                   <FolderPlus v-else :size="14" />
                   {{ t('pythonEnv.createVenv') }}
                 </button>
+                <button
+                  v-if="!hasVenv(selectedPlugin.id) || getVenvType(selectedPlugin.id) === 'external'"
+                  class="btn-secondary"
+                  :disabled="bindingVenv"
+                  @click="handleVenvBindingClick(selectedPlugin)"
+                >
+                  <Loader2 v-if="bindingVenv" :size="14" class="animate-spin" />
+                  <FolderPlus v-else :size="14" />
+                  {{ getVenvType(selectedPlugin.id) === 'external' ? t('pythonEnv.removeExternalVenv') : t('pythonEnv.selectExternalVenv') }}
+                </button>
                 <button 
                   v-else
                   class="btn-secondary"
@@ -434,6 +444,8 @@ type PluginEnvStatus = {
   dependencies: DependencyInfo[]
   pytorchInstalled: boolean
   pytorchType?: 'gpu' | 'cpu'  // 当前安装的类型
+  venvPath?: string
+  venvType?: string
   loading: boolean
 }
 
@@ -471,6 +483,7 @@ const recommendedPytorch = {
 // 操作状态
 const creatingVenv = ref(false)
 const deletingVenv = ref(false)
+const bindingVenv = ref(false)
 const installingDeps = ref(false)
 const uninstallingDep = ref<string | null>(null)
 const customCommand = ref('')
@@ -585,8 +598,14 @@ const hasMissingDeps = (pluginId: string): boolean => {
 const dataPath = ref('')
 
 const getVenvPath = (pluginId: string): string => {
+  const status = pluginEnvStatus.value[pluginId]
+  if (status?.venvType === 'external' && status?.venvPath) return status.venvPath
   if (!dataPath.value) return `plugins_python_venv/${pluginId}`
   return `${dataPath.value}/plugins_python_venv/${pluginId}`
+}
+
+const getVenvType = (pluginId: string): string => {
+  return pluginEnvStatus.value[pluginId]?.venvType || ''
 }
 
 // ============ API 调用 ============
@@ -640,6 +659,8 @@ const checkPluginEnvStatus = async (plugin: Plugin) => {
       const deps = data.dependencies || []
       pluginEnvStatus.value[plugin.id] = {
         hasVenv: data.hasVenv || false,
+        venvPath: data.venvPath || undefined,
+        venvType: data.venvType || undefined,
         dependencies: deps,
         pytorchInstalled: data.pytorchInstalled || false,
         pytorchType: data.pytorchType || undefined,
@@ -759,6 +780,51 @@ const deleteVenv = async (plugin: Plugin) => {
     appendLog(t('pythonEnv.venvDeleteFailed'), 'error')
   } finally {
     deletingVenv.value = false
+  }
+}
+
+const handleVenvBindingClick = async (plugin: Plugin) => {
+  const status = pluginEnvStatus.value[plugin.id]
+
+  if (status?.venvType === 'external') {
+    bindingVenv.value = true
+    try {
+      const res = await fetch('http://localhost:18080/api/python/unbind-venv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pluginId: plugin.id })
+      })
+      if (!res.ok) throw new Error('Request failed')
+      await checkPluginEnvStatus(plugin)
+    } catch (e) {
+      console.error('Unbind venv error:', e)
+      notification.error(t('pythonEnv.unbindVenvFailed'))
+    } finally {
+      bindingVenv.value = false
+    }
+    return
+  }
+
+  bindingVenv.value = true
+  try {
+    const selectedDir = await window.electronAPI?.selectDirectory?.(dataPath.value || undefined)
+    if (!selectedDir) return
+
+    const res = await fetch('http://localhost:18080/api/python/bind-venv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pluginId: plugin.id, venvPath: selectedDir })
+    })
+    if (!res.ok) {
+      notification.error(t('pythonEnv.invalidVenvPath'))
+      return
+    }
+    await checkPluginEnvStatus(plugin)
+  } catch (e) {
+    console.error('Bind venv error:', e)
+    notification.error(t('pythonEnv.bindVenvFailed'))
+  } finally {
+    bindingVenv.value = false
   }
 }
 

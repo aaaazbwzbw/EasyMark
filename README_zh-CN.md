@@ -14,7 +14,7 @@
 [![Latest Release](https://img.shields.io/github/v/release/aaaazbwzbw/EasyMark)](https://github.com/aaaazbwzbw/EasyMark/releases/latest)
 [![Total Downloads](https://img.shields.io/github/downloads/aaaazbwzbw/EasyMark/total)](https://github.com/aaaazbwzbw/EasyMark/releases)
 
-[English](README.md) | [简体中文](README_zh-CN.md)
+[简体中文](README.md) | [English](README_en-US.md)
 
 ⭐ **大家的 Star 就是我更新的动力！** ⭐
 
@@ -33,13 +33,19 @@
 
 ## 项目简介
 
-EasyMark 是一款现代化、高性能的计算机视觉标注工具。支持多种标注类型，集成 AI 辅助标注、数据集版本管理和模型训练等完整工作流。
+EasyMark 是一款现代化、高性能的计算机视觉标注工具，面向检测/分割/关键点等任务，提供从数据集导入、标注、版本管理、导出到训练、推理的一体化工作流。
+
+它采用 **Electron + Vue 3 + Go** 架构：
+
+- **前端（Vue 3）**：负责 UI 与交互
+- **后端（Go）**：负责文件读写、数据集导入导出、任务编排（大数据集性能更稳定）
+- **插件系统**：推理/训练/格式转换均可插件化扩展
 
 <div align="center">
 
-<img src="docs/assets/demo1.gif" alt="EasyMark AI 分割演示" width="100%">
+<img src="docs/assets/demo1.gif" alt="EasyMark AI Segmentation Demo" width="100%">
 <br>
-<img src="docs/assets/demo2.gif" alt="EasyMark 自动检测演示" width="100%">
+<img src="docs/assets/demo2.gif" alt="EasyMark Auto Detection Demo" width="100%">
 
 </div>
 
@@ -48,7 +54,7 @@ EasyMark 是一款现代化、高性能的计算机视觉标注工具。支持�
 ### 标注类型
 
 | 类型 | 应用场景 | 操作方式 |
-|------|----------|----------|
+|------|----------|-----------|
 | **矩形框** | 目标检测 | 鼠标拖拽 |
 | **多边形** | 实例分割 / 语义分割 | Alt + 点击 |
 | **关键点** | 姿态估计 | Alt + 点击（需绑定骨架） |
@@ -57,12 +63,19 @@ EasyMark 是一款现代化、高性能的计算机视觉标注工具。支持�
 
 内置 AI 插件，大幅提升标注效率：
 
-- **SAM2** - 交互式分割，点击即分割
+- **SAM2** - 交互式分割（提示点点击即分割）
 - **YOLO** - 切换图片自动检测
+
+SAM2 交互补充：
+
+- **Shift + 左键**：正向提示点
+- **Shift + 右键**：负向提示点（排除区域）
+- **Ctrl + Shift + 左键/右键**：连续追加提示点，基于当前分割结果持续细化
+- **基于SAM2分割结果的后处理**: 可通过简单的点选实现矩形框的快速标注
 
 ### 数据集管理
 
-- **格式支持**：YOLO、VOC、COCO 格式导入导出
+- **格式支持**：YOLO、VOC、COCO 导入导出
 - **版本控制**：快照、回溯、多版本管理
 - **灵活导出**：跨项目合并，自定义训练集/验证集/测试集划分
 
@@ -75,16 +88,19 @@ EasyMark 是一款现代化、高性能的计算机视觉标注工具。支持�
 ### 插件系统
 
 可通过插件扩展以下能力：
+
 - 数据集导入导出格式
 - 训练框架
 - 推理后端
 
+你可以在应用内“插件”页面管理插件，也可以按文档自行开发插件。
+
 ## 技术栈
 
 | 模块 | 技术 |
-|------|------|
+|-----------|------------|
 | 前端 | Vue 3 + TypeScript + Vite + TailwindCSS |
-| 桌面端 | Electron 28 |
+| 桌面端 | Electron |
 | 后端 | Go 1.21+ |
 | 插件 | Python 3.10+ |
 
@@ -137,15 +153,15 @@ cd host-electron && npm run build
 
 ```
 easymark/
-├── frontend/              # Vue 3 前端应用
-│   └── src/docs/          # 用户文档
-├── host-electron/         # Electron 主进程
-├── backend-go/            # Go 后端服务
-├── host-plugins/          # 内置插件
-│   ├── infer-plugins/     # 推理插件（SAM2、YOLO）
-│   ├── train_python/      # 训练插件
-│   └── dataset-common/    # 数据集格式转换
-└── docs/                  # 开发文档
+├── frontend/              # Vue 3 frontend application
+│   └── src/docs/          # User documentation
+├── host-electron/         # Electron main process
+├── backend-go/            # Go backend service
+├── host-plugins/          # Built-in plugins
+│   ├── infer-plugins/     # Inference plugins (SAM2, YOLO)
+│   ├── train_python/      # Training plugin
+│   └── dataset-common/    # Dataset format converters
+└── docs/                  # Development documentation
 ```
 
 ## 文档
@@ -166,11 +182,11 @@ easymark/
 
 ## 开发路线
 
+- [x] 视频标注
 - [ ] 插件市场
 - [ ] 云端同步
 - [ ] 团队协作
 - [ ] 更多 AI 模型支持
-- [ ] 视频标注
 
 ## 开源协议
 

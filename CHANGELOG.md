@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.2] - 2025-12-27
+
+### Added
+- **SAM2**
+  - Continuous prompt refinement with `Ctrl + Shift + Click` (append prompt points)
+- **Python Environment Management**
+  - Allow binding an external virtual environment for Python plugins
+- **Badges**
+  - Persist Python environment badge state
+  - Persist update badge state and check for updates hourly
+
+### Changed
+- Plugin installation/update now uses overlay copy instead of deleting the entire plugin directory (prevents losing downloaded weights)
+
+### Fixed
+- Fixed IPC structured clone error caused by sending Vue Proxy objects through Electron IPC
+- Improved SAM2 mask-to-polygon post-processing to reduce jagged edges
+- Fixed dataset export category conflict selection where the checkbox could remain checked after warning
+- Fixed `dataset-common` executable build/packaging so it is included in release artifacts
+- Reduced redundant `/api/python/plugins-deps-summary` checks triggered by navigation
+
+---
+
 ## [1.0.1] - 2025-12-05
 
 ### Added

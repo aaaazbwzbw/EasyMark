@@ -75,6 +75,8 @@ func main() {
 	// Python 环境管理（新接口，Python 环境页使用）
 	mux.HandleFunc("/api/python/version", handlePythonVersion)
 	mux.HandleFunc("/api/python/env-status", handlePythonEnvStatus)
+	mux.HandleFunc("/api/python/bind-venv", handlePythonBindVenv)
+	mux.HandleFunc("/api/python/unbind-venv", handlePythonUnbindVenv)
 	mux.HandleFunc("/api/python/create-venv", handlePythonCreateVenv)
 	mux.HandleFunc("/api/python/delete-venv", handlePythonDeleteVenv)
 	mux.HandleFunc("/api/python/install-deps", handlePythonInstallDeps)
