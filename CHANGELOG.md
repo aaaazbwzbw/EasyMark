@@ -15,8 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Python Environment Management**
   - Allow binding an external virtual environment for Python plugins
 - **Badges**
-  - Persist Python environment badge state
-  - Persist update badge state and check for updates hourly
+  - Persist the corner mark status of the Python environment, and no longer check every time the page is switched.
 
 ### Changed
 - Plugin installation/update now uses overlay copy instead of deleting the entire plugin directory (prevents losing downloaded weights)
